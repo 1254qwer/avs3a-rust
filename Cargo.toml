@@ -1,0 +1,42 @@
+[package]
+name = "avs3a"
+version = "0.1.0"
+edition = "2021"
+description = "Memory-safe AVS3-P3 (AV3A) decoder foundation"
+license-file = "LICENSE.md"
+rust-version = "1.74"
+
+[lib]
+name = "avs3a"
+path = "src/lib.rs"
+
+[dependencies]
+rustfft = "6.4.1"
+
+[[bin]]
+name = "avs3a-inspect"
+path = "src/bin/avs3a-inspect.rs"
+
+[[bin]]
+name = "avs3a-decode"
+path = "src/bin/avs3a-decode.rs"
+
+[[bin]]
+name = "avs3a-model-inspect"
+path = "src/bin/avs3a-model-inspect.rs"
+
+[[bin]]
+name = "avs3a-mono-decode"
+path = "src/bin/avs3a-mono-decode.rs"
+
+[[bin]]
+name = "avs3a-wav-compare"
+path = "src/bin/avs3a-wav-compare.rs"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+
+[lints.rust]
+unsafe_code = "forbid"
