@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 rayon = "1.12.0"
 rustfft = "6.4.1"
+wide = "1.6.1"
 
 [[bin]]
 name = "avs3a-inspect"

@@ -330,13 +330,54 @@ impl<'model> McCoreDecoder<'model> {
                 });
         });
 
+        let mut prepared_ok: [Option<PreparedNeuralSpectrum<'_>>; MAX_CHANNELS as usize] =
+            core::array::from_fn(|_| None);
+        let mut channel_randoms: [Avs3Random; MAX_CHANNELS as usize] =
+            core::array::from_fn(|_| frame_random.clone());
         for channel in 0..channels {
-            let prepared = prepared[channel]
+            let result = prepared[channel]
                 .take()
                 .expect("every active channel produced a preparation result")?;
-            let decoded = self.neural[channel].finish_prepared(prepared, &mut frame_random)?;
-            neural_diagnostics[channel] = Some(decoded.diagnostics());
-            self.spectra[channel].copy_from_slice(decoded.spectrum());
+            let draws = self.neural[channel].noise_random_draws(result)?;
+            channel_randoms[channel] = frame_random.clone();
+            for _ in 0..draws {
+                frame_random.next_u31();
+            }
+            prepared_ok[channel] = Some(result);
+        }
+
+        let mut finish_errors: [Option<McCoreDecodeError>; MAX_CHANNELS as usize] =
+            core::array::from_fn(|_| None);
+        self.neural_pool.install(|| {
+            prepared_ok[..channels]
+                .par_iter_mut()
+                .zip(self.neural[..channels].par_iter_mut())
+                .zip(self.spectra[..channels].par_iter_mut())
+                .zip(channel_randoms[..channels].par_iter_mut())
+                .zip(neural_diagnostics[..channels].par_iter_mut())
+                .zip(finish_errors[..channels].par_iter_mut())
+                .for_each(
+                    |(((((prepared, decoder), spectrum), random), diagnostics), error)| {
+                        match decoder.finish_prepared(
+                            prepared
+                                .take()
+                                .expect("every active channel has prepared neural data"),
+                            random,
+                        ) {
+                            Ok(decoded) => {
+                                *diagnostics = Some(decoded.diagnostics());
+                                spectrum.copy_from_slice(decoded.spectrum());
+                            }
+                            Err(failure) => *error = Some(failure.into()),
+                        }
+                    },
+                );
+        });
+        for error in finish_errors.into_iter().flatten() {
+            return Err(error);
+        }
+
+        for channel in 0..channels {
             let core =
                 cores[channel].ok_or(McCoreDecodeError::MissingCoreSideInformation { channel })?;
             self.channel_dsp[channel].reorder.degroup(

@@ -533,6 +533,49 @@ impl<'model> NeuralSpectrumDecoder<'model> {
         }
     }
 
+    /// Count the PRNG values consumed by noise filling without mutating the
+    /// latent buffer. This lets the multichannel core assign each channel an
+    /// independent random cursor before finishing channels in parallel.
+    pub(crate) fn noise_random_draws(
+        &self,
+        prepared: PreparedNeuralSpectrum<'_>,
+    ) -> Result<usize, NeuralQcError> {
+        let (noise_filling, noise_dimensions) = match prepared {
+            PreparedNeuralSpectrum::Main { input, .. } => {
+                let mut dimensions = input.noise_filling.num_lines;
+                for layer in self.base.decoder().layers() {
+                    dimensions /= layer.stride();
+                }
+                (input.noise_filling, dimensions)
+            }
+            PreparedNeuralSpectrum::LowComplexity { input, .. } => (
+                input.noise_filling,
+                input.noise_filling.num_lines / self.base.latent_shape().channels(),
+            ),
+        };
+        let shape = self.base.latent_shape();
+        if noise_dimensions > shape.dimensions() {
+            return Err(NeuralQcError::NoiseFillingDimensionsOutOfRange {
+                dimensions: noise_dimensions,
+                available: shape.dimensions(),
+            });
+        }
+        let ranges = noise_ranges(shape, noise_dimensions, noise_filling);
+        let medians = self.base.quantizer().quantile_medians();
+        let mut draws = 0;
+        for group in 0..noise_filling.group_count {
+            for dimension in ranges[group].0..ranges[group].1 {
+                for (channel, &median) in medians.iter().enumerate() {
+                    let index = dimension + channel * shape.dimensions();
+                    if self.base_dequantized[index] == median {
+                        draws += 1;
+                    }
+                }
+            }
+        }
+        Ok(draws)
+    }
+
     fn finish_main<'decoder>(
         &'decoder mut self,
         input: MainNeuralQc<'_>,

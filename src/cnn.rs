@@ -1,5 +1,7 @@
 use core::fmt;
 
+use wide::f32x8;
+
 use crate::LatentShape;
 use crate::model::{Activation, CnnLayer, CnnNetwork, Padding};
 
@@ -351,7 +353,33 @@ fn convolve_transpose_stride_one(layer: &CnnLayer, input: &[f32], output: &mut [
     let kernel = layer.kernel_coefficients();
 
     for output_channel in 0..output_channels {
-        for dimension in 0..dimensions {
+        let padding_end = kernel_size - 1 - padding_begin;
+        let interior_end = dimensions.saturating_sub(padding_end);
+        let mut dimension = 0;
+        while dimension < dimensions {
+            if dimension >= padding_begin && dimension + 8 <= interior_end {
+                let values = reformed_sum_wide(dot_len, |index| {
+                    let input_channel = index / kernel_size;
+                    let column_tap = index % kernel_size;
+                    let source_position = dimension + column_tap - padding_begin;
+                    let model_tap = kernel_size - column_tap - 1;
+                    let kernel_index = (model_tap * output_channels + output_channel)
+                        * input_channels
+                        + input_channel;
+                    let input_index = input_channel * dimensions + source_position;
+                    let features = f32x8::new(
+                        input[input_index..input_index + 8]
+                            .try_into()
+                            .expect("wide CNN input is an eight-value interior block"),
+                    );
+                    features * f32x8::splat(kernel[kernel_index])
+                });
+                let output_index = dimension + output_channel * dimensions;
+                output[output_index..output_index + 8].copy_from_slice(&values.to_array());
+                dimension += 8;
+                continue;
+            }
+
             let mut input_channel = 0;
             let mut column_tap = 0;
             output[dimension + output_channel * dimensions] = reformed_sum(dot_len, |_| {
@@ -369,6 +397,7 @@ fn convolve_transpose_stride_one(layer: &CnnLayer, input: &[f32], output: &mut [
                 }
                 product
             });
+            dimension += 1;
         }
     }
 }
@@ -384,7 +413,29 @@ fn convolve_transpose_stride_two(layer: &CnnLayer, input: &[f32], output: &mut [
     let kernel = layer.kernel_coefficients();
 
     for output_channel in 0..output_channels {
-        for dimension in 0..input_dimensions {
+        let interior_end = if kernel_size == 5 {
+            input_dimensions - 1
+        } else {
+            input_dimensions
+        };
+        let mut dimension = 0;
+        while dimension < input_dimensions {
+            if dimension > 0 && dimension + 8 <= interior_end {
+                convolve_transpose_stride_two_wide(
+                    input,
+                    output,
+                    kernel,
+                    input_dimensions,
+                    output_dimensions,
+                    input_channels,
+                    output_channels,
+                    kernel_size,
+                    output_channel,
+                    dimension,
+                );
+                dimension += 8;
+                continue;
+            }
             let mut odd_input_channel = 0;
             let mut odd_part_tap = 0;
             let odd = reformed_sum(odd_kernel_size * input_channels, |_| {
@@ -435,8 +486,107 @@ fn convolve_transpose_stride_two(layer: &CnnLayer, input: &[f32], output: &mut [
                 output[output_index] = odd;
                 output[output_index + 1] = even;
             }
+            dimension += 1;
         }
     }
+}
+
+#[inline(always)]
+fn convolve_transpose_stride_two_wide(
+    input: &[f32],
+    output: &mut [f32],
+    kernel: &[f32],
+    input_dimensions: usize,
+    output_dimensions: usize,
+    input_channels: usize,
+    output_channels: usize,
+    kernel_size: usize,
+    output_channel: usize,
+    dimension: usize,
+) {
+    let odd_kernel_size = kernel_size.div_ceil(2);
+    let even_kernel_size = (kernel_size - 1) / 2;
+
+    let odd = reformed_sum_wide(odd_kernel_size * input_channels, |index| {
+        let input_channel = index / odd_kernel_size;
+        let tap = index % odd_kernel_size;
+        let source_position = dimension + tap - 1;
+        let model_tap = kernel_size - 2 * tap - 1;
+        let kernel_index =
+            (model_tap * output_channels + output_channel) * input_channels + input_channel;
+        let input_index = input_channel * input_dimensions + source_position;
+        let features = f32x8::new(
+            input[input_index..input_index + 8]
+                .try_into()
+                .expect("wide CNN input is an eight-value interior block"),
+        );
+        features * f32x8::splat(kernel[kernel_index])
+    });
+
+    let even = reformed_sum_wide(even_kernel_size * input_channels, |index| {
+        let input_channel = index / even_kernel_size;
+        let tap = index % even_kernel_size;
+        let source_position = if kernel_size == 3 {
+            dimension
+        } else {
+            dimension + tap - 1
+        };
+        let model_tap = kernel_size - (2 * tap + 1) - 1;
+        let kernel_index =
+            (model_tap * output_channels + output_channel) * input_channels + input_channel;
+        let input_index = input_channel * input_dimensions + source_position;
+        let features = f32x8::new(
+            input[input_index..input_index + 8]
+                .try_into()
+                .expect("wide CNN input is an eight-value interior block"),
+        );
+        features * f32x8::splat(kernel[kernel_index])
+    });
+
+    let odd = odd.to_array();
+    let even = even.to_array();
+    let output_base = output_channel * output_dimensions + 2 * dimension;
+    for lane in 0..8 {
+        let output_index = output_base + 2 * lane;
+        if kernel_size == 5 {
+            output[output_index] = even[lane];
+            output[output_index + 1] = odd[lane];
+        } else {
+            output[output_index] = odd[lane];
+            output[output_index + 1] = even[lane];
+        }
+    }
+}
+
+// Each SIMD lane follows the scalar GEMM_REFORM accumulation independently;
+// this vectorizes positions without changing their floating-point order.
+#[inline(always)]
+fn reformed_sum_wide(length: usize, mut product: impl FnMut(usize) -> f32x8) -> f32x8 {
+    let grouped_end = length / 8 * 8;
+    let mut first = f32x8::ZERO;
+    let mut second = f32x8::ZERO;
+    let mut third = f32x8::ZERO;
+    let mut fourth = f32x8::ZERO;
+    let mut index = 0;
+    while index < grouped_end {
+        first += product(index);
+        first += product(index + 1);
+        second += product(index + 2);
+        second += product(index + 3);
+        third += product(index + 4);
+        third += product(index + 5);
+        fourth += product(index + 6);
+        fourth += product(index + 7);
+        index += 8;
+    }
+    let grouped = (first + second) + (third + fourth);
+
+    let mut tail = f32x8::ZERO;
+    while index < length {
+        tail += product(index);
+        index += 1;
+    }
+    grouped + tail
 }
 
 fn padded_value(input: &[f32], dimensions: usize, channel: usize, position: isize) -> f32 {
@@ -462,15 +612,49 @@ fn apply_normalization(
         *square = value * value;
     }
 
-    // C computes every square before changing featureOut, then iterates
-    // dimension first and channel second.
-    for dimension in 0..dimensions {
-        for output_channel in 0..channels {
-            let weighted = reformed_sum(channels, |input_channel| {
-                squared[dimension + input_channel * dimensions]
-                    * parameters.gamma()[output_channel * channels + input_channel]
+    let gamma = parameters.gamma();
+    let activation = layer.activation();
+
+    for (output_channel, output_row) in output.chunks_mut(dimensions).enumerate() {
+        let gamma_row = &gamma[output_channel * channels..(output_channel + 1) * channels];
+        let beta = parameters.beta()[output_channel];
+        let mut dimension = 0;
+        while dimension + 8 <= dimensions {
+            let weighted = reformed_sum_wide(channels, |input_channel| {
+                let input_index = input_channel * dimensions + dimension;
+                let values = f32x8::new(
+                    squared[input_index..input_index + 8]
+                        .try_into()
+                        .expect("wide GDN input is an eight-value block"),
+                );
+                values * f32x8::splat(gamma_row[input_channel])
             });
-            let radicand = weighted + parameters.beta()[output_channel];
+            let radicands = (weighted + f32x8::splat(beta)).to_array();
+            for lane in 0..8 {
+                let radicand = radicands[lane];
+                if !radicand.is_finite() || radicand <= 0.0 {
+                    let index = dimension + lane + output_channel * dimensions;
+                    return Err(CnnError::InvalidNormalization {
+                        layer: layer_index,
+                        index,
+                        bits: radicand.to_bits(),
+                    });
+                }
+                let normalization = f64::from(radicand).sqrt() as f32;
+                match activation {
+                    Activation::Gdn => output_row[dimension + lane] /= normalization,
+                    Activation::Igdn => output_row[dimension + lane] *= normalization,
+                    _ => unreachable!("normalization is only called for GDN/IGDN"),
+                }
+            }
+            dimension += 8;
+        }
+
+        while dimension < dimensions {
+            let weighted = reformed_sum(channels, |input_channel| {
+                squared[dimension + input_channel * dimensions] * gamma_row[input_channel]
+            });
+            let radicand = weighted + beta;
             if !radicand.is_finite() || radicand <= 0.0 {
                 let index = dimension + output_channel * dimensions;
                 return Err(CnnError::InvalidNormalization {
@@ -482,12 +666,12 @@ fn apply_normalization(
             // The reference calls the double-precision C sqrt and then casts
             // its result to float before multiplying/dividing.
             let normalization = f64::from(radicand).sqrt() as f32;
-            let index = dimension + output_channel * dimensions;
-            match layer.activation() {
-                Activation::Gdn => output[index] /= normalization,
-                Activation::Igdn => output[index] *= normalization,
+            match activation {
+                Activation::Gdn => output_row[dimension] /= normalization,
+                Activation::Igdn => output_row[dimension] *= normalization,
                 _ => unreachable!("normalization is only called for GDN/IGDN"),
             }
+            dimension += 1;
         }
     }
     Ok(())
