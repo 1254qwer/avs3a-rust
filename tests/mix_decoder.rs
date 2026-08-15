@@ -1,8 +1,8 @@
 use avs3a::{
-    crc16, mc_bytes_allocation, AudioCodecId, BitDepth, BitReader, BitWriter, ChannelConfig,
-    CodecProfile, FrameHeader, FrameStream, McBitstreamConfig, McSideInfo, MixCoreKind,
-    MixDecoderBackend, NnType, PendingDecoder, SoundBedType, StreamEvent, AVS3_FEATURE_DIMENSIONS,
-    MC_LFE_RESERVED_LINES,
+    AVS3_FEATURE_DIMENSIONS, AudioCodecId, BitDepth, BitReader, BitWriter, ChannelConfig,
+    CodecProfile, FrameHeader, FrameStream, MC_LFE_RESERVED_LINES, McBitstreamConfig, McSideInfo,
+    MixCoreKind, MixDecoderBackend, NnType, PendingDecoder, SoundBedType, StreamEvent, crc16,
+    mc_bytes_allocation,
 };
 
 mod support;

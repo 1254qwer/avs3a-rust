@@ -2,12 +2,12 @@ use core::fmt;
 
 use crate::bitstream::BitReader;
 use crate::core_side::{
-    parse_core_side_prefix, parse_grouping, parse_neural_qc, qc_side_bits, BweConfig,
-    CoreBitstreamConfig, CoreBitstreamError, CoreSideInfo, CoreSideInfoPrefix, LsfCodebookMode,
-    ParsedNeuralQc, WindowGrouping,
+    BweConfig, CoreBitstreamConfig, CoreBitstreamError, CoreSideInfo, CoreSideInfoPrefix,
+    LsfCodebookMode, ParsedNeuralQc, WindowGrouping, parse_core_side_prefix, parse_grouping,
+    parse_neural_qc, qc_side_bits,
 };
 use crate::error::BitstreamError;
-use crate::header::{ChannelConfig, CodecProfile, FrameHeader, SoundBedType, MAX_CHANNELS};
+use crate::header::{ChannelConfig, CodecProfile, FrameHeader, MAX_CHANNELS, SoundBedType};
 use crate::model::AVS3_FEATURE_DIMENSIONS;
 use crate::neural_qc::MAX_QC_BITSTREAM_BYTES;
 
@@ -152,7 +152,10 @@ impl fmt::Display for McError {
                 "MC Mix bitrate {total_bitrate} does not match bed {bed_bitrate:?} plus {objects} objects at {object_bitrate:?} each"
             ),
             Self::InvalidPairCount { pairs, limit } => {
-                write!(f, "MC frame declares {pairs} pairs; decoder limit is {limit}")
+                write!(
+                    f,
+                    "MC frame declares {pairs} pairs; decoder limit is {limit}"
+                )
             }
             Self::InvalidPairIndex {
                 index,
@@ -176,10 +179,9 @@ impl fmt::Display for McError {
                 f,
                 "MC pair spectra have different lengths: {first} and {second}"
             ),
-            Self::InvalidSpectrumLength { expected, actual } => write!(
-                f,
-                "MC spectrum has {actual} lines; expected {expected}"
-            ),
+            Self::InvalidSpectrumLength { expected, actual } => {
+                write!(f, "MC spectrum has {actual} lines; expected {expected}")
+            }
             Self::SideInfoChannelMismatch { expected, actual } => write!(
                 f,
                 "MC side information has {actual} channels; configuration expects {expected}"
@@ -1326,12 +1328,16 @@ mod tests {
     fn lfe_processing_preserves_only_normative_low_frequency_lines() {
         let mut spectrum = [1.0_f32; AVS3_FEATURE_DIMENSIONS];
         clear_mc_lfe_spectrum(&mut spectrum).unwrap();
-        assert!(spectrum[..MC_LFE_RESERVED_LINES]
-            .iter()
-            .all(|&value| value == 1.0));
-        assert!(spectrum[MC_LFE_RESERVED_LINES..]
-            .iter()
-            .all(|&value| value == 0.0));
+        assert!(
+            spectrum[..MC_LFE_RESERVED_LINES]
+                .iter()
+                .all(|&value| value == 1.0)
+        );
+        assert!(
+            spectrum[MC_LFE_RESERVED_LINES..]
+                .iter()
+                .all(|&value| value == 0.0)
+        );
         assert!(matches!(
             clear_mc_lfe_spectrum(&mut [0.0; 31]),
             Err(McError::InvalidSpectrumLength {

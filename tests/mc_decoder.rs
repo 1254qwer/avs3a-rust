@@ -1,6 +1,6 @@
 use avs3a::{
-    crc16, BitReader, BitWriter, ChannelConfig, FrameStream, McDecoderBackend, PendingDecoder,
-    StreamEvent, AVS3_FEATURE_DIMENSIONS, MC_LFE_RESERVED_LINES,
+    AVS3_FEATURE_DIMENSIONS, BitReader, BitWriter, ChannelConfig, FrameStream,
+    MC_LFE_RESERVED_LINES, McDecoderBackend, PendingDecoder, StreamEvent, crc16,
 };
 
 const AUDIO_BITS: usize = 8_134;

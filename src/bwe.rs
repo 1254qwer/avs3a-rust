@@ -2,7 +2,7 @@ use core::fmt;
 
 use crate::core_side::{BweConfig, BweSideInfo, BweWhiteningLevel};
 use crate::model::AVS3_FEATURE_DIMENSIONS;
-use crate::random::{Avs3Random, AVS3_RAND_MAX};
+use crate::random::{AVS3_RAND_MAX, Avs3Random};
 
 const WHITENING_RADIUS: usize = 7;
 const WHITENING_WIDTH: f32 = (WHITENING_RADIUS * 2 + 1) as f32;

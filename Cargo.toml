@@ -1,16 +1,17 @@
 [package]
 name = "avs3a"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Memory-safe AVS3-P3 (AV3A) decoder foundation"
 license-file = "LICENSE.md"
-rust-version = "1.74"
+rust-version = "1.96"
 
 [lib]
 name = "avs3a"
 path = "src/lib.rs"
 
 [dependencies]
+rayon = "1.12.0"
 rustfft = "6.4.1"
 
 [[bin]]
@@ -37,6 +38,13 @@ path = "src/bin/avs3a-wav-compare.rs"
 codegen-units = 1
 lto = "thin"
 panic = "abort"
+
+# Keep optimized code representative while retaining symbols for perf and
+# cargo-flamegraph. Normal release binaries remain unchanged.
+[profile.profiling]
+inherits = "release"
+debug = 1
+strip = false
 
 [lints.rust]
 unsafe_code = "forbid"

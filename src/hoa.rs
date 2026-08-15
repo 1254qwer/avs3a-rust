@@ -2,13 +2,13 @@ use core::fmt;
 
 use crate::bitstream::BitReader;
 use crate::core_side::{
-    parse_core_side_prefix, parse_grouping, parse_neural_qc, qc_side_bits, BweConfig,
-    CoreBitstreamConfig, CoreBitstreamError, CoreSideInfo, CoreSideInfoPrefix, LsfCodebookMode,
-    ParsedNeuralQc, WindowGrouping,
+    BweConfig, CoreBitstreamConfig, CoreBitstreamError, CoreSideInfo, CoreSideInfoPrefix,
+    LsfCodebookMode, ParsedNeuralQc, WindowGrouping, parse_core_side_prefix, parse_grouping,
+    parse_neural_qc, qc_side_bits,
 };
 use crate::error::BitstreamError;
 use crate::header::{ChannelConfig, CodecProfile, FrameHeader, MAX_CHANNELS};
-use crate::mc::{apply_mc_ild, McError, MC_NO_ILD_INDEX};
+use crate::mc::{MC_NO_ILD_INDEX, McError, apply_mc_ild};
 use crate::model::AVS3_FEATURE_DIMENSIONS;
 use crate::neural_qc::MAX_QC_BITSTREAM_BYTES;
 
@@ -138,10 +138,9 @@ impl fmt::Display for HoaError {
                 f,
                 "HOA group {group} pair index {index} is outside {combinations} channel combinations"
             ),
-            Self::InvalidIldIndex(index) => write!(
-                f,
-                "HOA ILD index {index} is outside 0..={MC_NO_ILD_INDEX}"
-            ),
+            Self::InvalidIldIndex(index) => {
+                write!(f, "HOA ILD index {index} is outside 0..={MC_NO_ILD_INDEX}")
+            }
             Self::SideInfoConfigurationMismatch => {
                 f.write_str("HOA side information does not match the bitrate configuration")
             }
@@ -252,7 +251,7 @@ impl HoaBitstreamConfig {
                     channel_config: header.channel_config,
                     hoa_order: header.hoa_order,
                     channels: header.channels,
-                })
+                });
             }
         };
         let output_channels = usize::from((order + 1) * (order + 1));
@@ -293,7 +292,7 @@ impl HoaBitstreamConfig {
                     return Err(HoaError::UnsupportedBitrate {
                         order,
                         bitrate: header.bitrate,
-                    })
+                    });
                 }
             };
 
@@ -1201,22 +1200,27 @@ mod tests {
         assert!(hoa3_full.groups()[0].bwe_enabled());
         assert!(!hoa3_full.default_spatial_analysis());
 
-        assert!(foa
-            .core_for_channel(&header(1, 128_000, 0), 0)
-            .unwrap()
-            .bwe()
-            .is_some());
+        assert!(
+            foa.core_for_channel(&header(1, 128_000, 0), 0)
+                .unwrap()
+                .bwe()
+                .is_some()
+        );
         let hoa3_low = HoaBitstreamConfig::for_header(&header(3, 256_000, 0)).unwrap();
-        assert!(hoa3_low
-            .core_for_channel(&header(3, 256_000, 0), 0)
-            .unwrap()
-            .bwe()
-            .is_none());
-        assert!(hoa3_low
-            .core_for_channel(&header(3, 256_000, 0), 2)
-            .unwrap()
-            .bwe()
-            .is_some());
+        assert!(
+            hoa3_low
+                .core_for_channel(&header(3, 256_000, 0), 0)
+                .unwrap()
+                .bwe()
+                .is_none()
+        );
+        assert!(
+            hoa3_low
+                .core_for_channel(&header(3, 256_000, 0), 2)
+                .unwrap()
+                .bwe()
+                .is_some()
+        );
     }
 
     #[test]

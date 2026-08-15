@@ -2,9 +2,9 @@ use core::fmt;
 
 use crate::bitstream::BitReader;
 use crate::core_side::{
-    parse_core_side_prefix, parse_grouping, parse_neural_qc, qc_side_bits, BweConfig,
-    CoreBitstreamConfig, CoreBitstreamError, CoreSideInfo, LsfCodebookMode, ParsedNeuralQc,
-    WindowGrouping,
+    BweConfig, CoreBitstreamConfig, CoreBitstreamError, CoreSideInfo, LsfCodebookMode,
+    ParsedNeuralQc, WindowGrouping, parse_core_side_prefix, parse_grouping, parse_neural_qc,
+    qc_side_bits,
 };
 use crate::error::BitstreamError;
 use crate::header::{ChannelConfig, CodecProfile, FrameHeader, SoundBedType};

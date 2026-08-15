@@ -4,8 +4,8 @@ use crate::bitstream::BitReader;
 use crate::error::BitstreamError;
 use crate::header::{FrameHeader, NnType};
 use crate::neural_qc::{
-    LowComplexityNeuralQc, MainNeuralQc, NeuralBitstreams, NeuralQcError, NoiseFilling, NoiseGroup,
-    AVS3_SHORT_BLOCKS, MAX_QC_BITSTREAM_BYTES,
+    AVS3_SHORT_BLOCKS, LowComplexityNeuralQc, MAX_QC_BITSTREAM_BYTES, MainNeuralQc,
+    NeuralBitstreams, NeuralQcError, NoiseFilling, NoiseGroup,
 };
 
 pub const MAX_LSF_CODEBOOKS: usize = 7;
@@ -64,7 +64,10 @@ impl fmt::Display for CoreBitstreamError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotMono { channels } => {
-                write!(f, "mono core parser requires one channel, header has {channels}")
+                write!(
+                    f,
+                    "mono core parser requires one channel, header has {channels}"
+                )
             }
             Self::UnsupportedMonoBweBitrate(bitrate) => {
                 write!(f, "mono bitrate {bitrate} has no AVS3 BWE configuration")

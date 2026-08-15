@@ -324,9 +324,11 @@ mod tests {
         let side = McrSideInfo::new([[0; MCR_SUBVECTORS]; MCR_SUBSPECTRA], false).unwrap();
         let mut left = [1.0_f32; 17];
         let mut right = [2.0_f32; AVS3_FEATURE_DIMENSIONS];
-        assert!(McrSynthesis::new()
-            .apply(side, &mut left, &mut right)
-            .is_err());
+        assert!(
+            McrSynthesis::new()
+                .apply(side, &mut left, &mut right)
+                .is_err()
+        );
         assert_eq!(left, [1.0; 17]);
         assert_eq!(right, [2.0; AVS3_FEATURE_DIMENSIONS]);
     }

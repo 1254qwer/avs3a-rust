@@ -1,6 +1,6 @@
 use crate::crc16;
 use crate::error::{HeaderError, StreamError};
-use crate::header::{parse_header_at, FrameHeader, MAX_HEADER_BYTES, MAX_PAYLOAD_BYTES};
+use crate::header::{FrameHeader, MAX_HEADER_BYTES, MAX_PAYLOAD_BYTES, parse_header_at};
 
 const DEFAULT_BUFFER_LIMIT: usize = MAX_HEADER_BYTES + MAX_PAYLOAD_BYTES;
 

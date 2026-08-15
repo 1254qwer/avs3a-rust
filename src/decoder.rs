@@ -192,7 +192,7 @@ impl<B: DecoderBackend> Decoder<B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{crc16, BitWriter, ChannelConfig, FrameStream, StreamEvent};
+    use crate::{BitWriter, ChannelConfig, FrameStream, StreamEvent, crc16};
 
     #[derive(Debug, Default)]
     struct TestBackend {

@@ -1,7 +1,7 @@
 use core::fmt;
 
-use crate::model::{Activation, CnnLayer, CnnNetwork, Padding};
 use crate::LatentShape;
+use crate::model::{Activation, CnnLayer, CnnNetwork, Padding};
 
 pub const MAX_CNN_WORKSPACE_VALUES: usize = 1 << 20;
 
@@ -75,10 +75,9 @@ impl fmt::Display for CnnError {
             Self::OutputLength { expected, actual } => {
                 write!(f, "CNN output has {actual} values; expected {expected}")
             }
-            Self::NonFiniteInput { index, bits } => write!(
-                f,
-                "CNN input {index} is not finite (bits 0x{bits:08x})"
-            ),
+            Self::NonFiniteInput { index, bits } => {
+                write!(f, "CNN input {index} is not finite (bits 0x{bits:08x})")
+            }
             Self::UnsupportedPadding { layer, padding } => {
                 write!(f, "CNN layer {layer} uses unsupported {padding:?} padding")
             }
@@ -94,7 +93,10 @@ impl fmt::Display for CnnError {
                 "CNN layer {layer} uses kernel {kernel_size} with stride {stride}; the C two-part path only defines kernels 3 and 5"
             ),
             Self::UnsupportedActivation { layer, activation } => {
-                write!(f, "CNN layer {layer} uses unsupported activation {activation:?}")
+                write!(
+                    f,
+                    "CNN layer {layer} uses unsupported activation {activation:?}"
+                )
             }
             Self::MissingGdnParameters { layer } => {
                 write!(f, "CNN layer {layer} has no GDN/IGDN parameters")
@@ -243,13 +245,13 @@ fn validate_layer(layer: &CnnLayer, index: usize) -> Result<(), CnnError> {
                 layer: index,
                 stride: 2,
                 kernel_size: layer.kernel_size(),
-            })
+            });
         }
         stride => {
             return Err(CnnError::UnsupportedStride {
                 layer: index,
                 stride,
-            })
+            });
         }
     }
     match layer.activation() {
@@ -274,7 +276,7 @@ fn validate_layer(layer: &CnnLayer, index: usize) -> Result<(), CnnError> {
             return Err(CnnError::UnsupportedActivation {
                 layer: index,
                 activation,
-            })
+            });
         }
     }
     Ok(())
@@ -294,7 +296,7 @@ fn decode_layer(
             return Err(CnnError::UnsupportedStride {
                 layer: layer_index,
                 stride,
-            })
+            });
         }
     }
 
@@ -323,7 +325,7 @@ fn decode_layer(
             return Err(CnnError::UnsupportedActivation {
                 layer: layer_index,
                 activation,
-            })
+            });
         }
     }
 
@@ -346,20 +348,26 @@ fn convolve_transpose_stride_one(layer: &CnnLayer, input: &[f32], output: &mut [
     let kernel_size = layer.kernel_size();
     let padding_begin = (kernel_size - 1) / 2;
     let dot_len = kernel_size * input_channels;
+    let kernel = layer.kernel_coefficients();
 
     for output_channel in 0..output_channels {
         for dimension in 0..dimensions {
-            output[dimension + output_channel * dimensions] = reformed_sum(dot_len, |index| {
-                let input_channel = index / kernel_size;
-                let column_tap = index % kernel_size;
+            let mut input_channel = 0;
+            let mut column_tap = 0;
+            output[dimension + output_channel * dimensions] = reformed_sum(dot_len, |_| {
                 let source_position =
                     dimension as isize + column_tap as isize - padding_begin as isize;
                 let feature = padded_value(input, dimensions, input_channel, source_position);
                 let model_tap = kernel_size - column_tap - 1;
-                let kernel = layer
-                    .kernel_coefficient(model_tap, input_channel, output_channel)
-                    .expect("parsed CNN kernel shape is internally consistent");
-                kernel * feature
+                let kernel_index =
+                    (model_tap * output_channels + output_channel) * input_channels + input_channel;
+                let product = kernel[kernel_index] * feature;
+                column_tap += 1;
+                if column_tap == kernel_size {
+                    column_tap = 0;
+                    input_channel += 1;
+                }
+                product
             });
         }
     }
@@ -373,38 +381,50 @@ fn convolve_transpose_stride_two(layer: &CnnLayer, input: &[f32], output: &mut [
     let kernel_size = layer.kernel_size();
     let odd_kernel_size = kernel_size.div_ceil(2);
     let even_kernel_size = (kernel_size - 1) / 2;
+    let kernel = layer.kernel_coefficients();
 
     for output_channel in 0..output_channels {
         for dimension in 0..input_dimensions {
-            let odd = reformed_sum(odd_kernel_size * input_channels, |index| {
-                let input_channel = index / odd_kernel_size;
-                let part_tap = index % odd_kernel_size;
+            let mut odd_input_channel = 0;
+            let mut odd_part_tap = 0;
+            let odd = reformed_sum(odd_kernel_size * input_channels, |_| {
                 let feature = padded_value(
                     input,
                     input_dimensions,
-                    input_channel,
-                    dimension as isize + part_tap as isize - 1,
+                    odd_input_channel,
+                    dimension as isize + odd_part_tap as isize - 1,
                 );
-                let model_tap = kernel_size - 2 * part_tap - 1;
-                let kernel = layer
-                    .kernel_coefficient(model_tap, input_channel, output_channel)
-                    .expect("parsed CNN kernel shape is internally consistent");
-                kernel * feature
+                let model_tap = kernel_size - 2 * odd_part_tap - 1;
+                let kernel_index = (model_tap * output_channels + output_channel) * input_channels
+                    + odd_input_channel;
+                let product = kernel[kernel_index] * feature;
+                odd_part_tap += 1;
+                if odd_part_tap == odd_kernel_size {
+                    odd_part_tap = 0;
+                    odd_input_channel += 1;
+                }
+                product
             });
-            let even = reformed_sum(even_kernel_size * input_channels, |index| {
-                let input_channel = index / even_kernel_size;
-                let part_tap = index % even_kernel_size;
+            let mut even_input_channel = 0;
+            let mut even_part_tap = 0;
+            let even = reformed_sum(even_kernel_size * input_channels, |_| {
                 let source_position = if kernel_size == 3 {
                     dimension as isize
                 } else {
-                    dimension as isize + part_tap as isize - 1
+                    dimension as isize + even_part_tap as isize - 1
                 };
-                let feature = padded_value(input, input_dimensions, input_channel, source_position);
-                let model_tap = kernel_size - (2 * part_tap + 1) - 1;
-                let kernel = layer
-                    .kernel_coefficient(model_tap, input_channel, output_channel)
-                    .expect("parsed CNN kernel shape is internally consistent");
-                kernel * feature
+                let feature =
+                    padded_value(input, input_dimensions, even_input_channel, source_position);
+                let model_tap = kernel_size - (2 * even_part_tap + 1) - 1;
+                let kernel_index = (model_tap * output_channels + output_channel) * input_channels
+                    + even_input_channel;
+                let product = kernel[kernel_index] * feature;
+                even_part_tap += 1;
+                if even_part_tap == even_kernel_size {
+                    even_part_tap = 0;
+                    even_input_channel += 1;
+                }
+                product
             });
 
             let output_index = output_channel * output_dimensions + 2 * dimension;

@@ -1,8 +1,8 @@
 use crate::decoder::{DecoderBackend, DecoderConfig};
 use crate::error::DecodeError;
-use crate::header::{ChannelConfig, CodecProfile, FrameHeader, SoundBedType, MAX_CHANNELS};
+use crate::header::{ChannelConfig, CodecProfile, FrameHeader, MAX_CHANNELS, SoundBedType};
 use crate::mc::is_multichannel_config;
-use crate::mc_core::{McCoreDecodeError, McCoreDecoder, McCoreDiagnostics, MC_MAX_FRAME_SAMPLES};
+use crate::mc_core::{MC_MAX_FRAME_SAMPLES, McCoreDecodeError, McCoreDecoder, McCoreDiagnostics};
 use crate::metadata::{MetadataPayloadParser, MetadataSummary};
 use crate::metadata_values::FrameMetadata;
 use crate::model::AVS3_FEATURE_DIMENSIONS;

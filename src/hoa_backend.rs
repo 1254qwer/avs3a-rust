@@ -2,7 +2,7 @@ use crate::decoder::{DecoderBackend, DecoderConfig};
 use crate::error::DecodeError;
 use crate::header::{ChannelConfig, CodecProfile, FrameHeader, MAX_CHANNELS};
 use crate::hoa_core::{
-    HoaCoreDecodeError, HoaCoreDecoder, HoaCoreDiagnostics, HOA_MAX_FRAME_SAMPLES,
+    HOA_MAX_FRAME_SAMPLES, HoaCoreDecodeError, HoaCoreDecoder, HoaCoreDiagnostics,
 };
 use crate::metadata::{MetadataPayloadParser, MetadataSummary};
 use crate::metadata_values::FrameMetadata;

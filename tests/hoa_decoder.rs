@@ -1,6 +1,6 @@
 use avs3a::{
-    crc16, BitReader, BitWriter, ChannelConfig, CodecProfile, FrameStream, HoaDecoderBackend,
-    PendingDecoder, StreamEvent, AVS3_FEATURE_DIMENSIONS,
+    AVS3_FEATURE_DIMENSIONS, BitReader, BitWriter, ChannelConfig, CodecProfile, FrameStream,
+    HoaDecoderBackend, PendingDecoder, StreamEvent, crc16,
 };
 
 mod support;

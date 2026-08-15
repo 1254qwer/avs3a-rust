@@ -3,11 +3,11 @@ use core::fmt;
 use crate::bwe::{BweSynthesis, BweSynthesisError};
 use crate::core_side::{CoreSideInfo, ParsedNeuralQc};
 use crate::fd_shaping::{FdShapingError, FdSpectrumShaping};
-use crate::header::{FrameHeader, NnType, MAX_CHANNELS};
-use crate::hoa::{inverse_hoa_dmx, HoaBitstreamConfig, HoaError, HoaSideInfo, HoaSideInfoDecoder};
+use crate::header::{FrameHeader, MAX_CHANNELS, NnType};
+use crate::hoa::{HoaBitstreamConfig, HoaError, HoaSideInfo, HoaSideInfoDecoder, inverse_hoa_dmx};
 use crate::hoa_synthesis::{HoaPostSynthesis, HoaPostSynthesisError};
 use crate::mdct_synthesis::{MdctSynthesis, MdctSynthesisError};
-use crate::model::{NeuralModel, AVS3_FEATURE_DIMENSIONS};
+use crate::model::{AVS3_FEATURE_DIMENSIONS, NeuralModel};
 use crate::neural_qc::{NeuralQcError, NeuralSpectrumDecoder, NeuralSpectrumDiagnostics};
 use crate::random::Avs3Random;
 use crate::spectrum::{SpectrumReorder, SpectrumReorderError};
@@ -41,7 +41,10 @@ impl fmt::Display for HoaCoreDecodeError {
                 "HOA synthesis output has {actual} samples; expected {expected}"
             ),
             Self::MissingCoreSideInformation { channel } => {
-                write!(f, "HOA transport channel {channel} is missing core side information")
+                write!(
+                    f,
+                    "HOA transport channel {channel} is missing core side information"
+                )
             }
             Self::MissingNeuralSideInformation { channel } => write!(
                 f,
@@ -421,8 +424,8 @@ impl fmt::Debug for HoaCoreDecoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::header::{AudioCodecId, BitDepth, ChannelConfig, CodecProfile};
     use crate::BitWriter;
+    use crate::header::{AudioCodecId, BitDepth, ChannelConfig, CodecProfile};
 
     const AUDIO_BITS: usize = 4_038;
 

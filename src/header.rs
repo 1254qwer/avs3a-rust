@@ -304,7 +304,7 @@ pub(crate) fn parse_header_at(
             return Err(HeaderError::UnsupportedProfile {
                 offset: stream_offset,
                 value,
-            })
+            });
         }
     };
     let sample_rate_index = read(&mut bits, 4, input.len())? as u8;

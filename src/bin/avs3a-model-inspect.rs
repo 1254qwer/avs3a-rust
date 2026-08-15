@@ -5,8 +5,8 @@ use std::io::{self, Read};
 use std::process::ExitCode;
 
 use avs3a::{
-    CnnNetwork, ModelEncoding, NeuralCodecModel, NeuralModel, NeuralModelType, ScalarCnnDecoder,
-    DEFAULT_MAX_MODEL_BYTES,
+    CnnNetwork, DEFAULT_MAX_MODEL_BYTES, ModelEncoding, NeuralCodecModel, NeuralModel,
+    NeuralModelType, ScalarCnnDecoder,
 };
 
 fn main() -> ExitCode {

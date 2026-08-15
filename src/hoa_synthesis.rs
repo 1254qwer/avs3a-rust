@@ -1,7 +1,7 @@
 use core::fmt;
 
 use crate::header::MAX_CHANNELS;
-use crate::hoa::{HoaBitstreamConfig, HoaError, HoaSideInfo, HOA_BASIS_TABLE_LEN, MAX_HOA_BASIS};
+use crate::hoa::{HOA_BASIS_TABLE_LEN, HoaBitstreamConfig, HoaError, HoaSideInfo, MAX_HOA_BASIS};
 use crate::imdct::{FastImdct, ImdctError};
 use crate::mdct::{FastMdct, MdctError};
 use crate::model::AVS3_FEATURE_DIMENSIONS;

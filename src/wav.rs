@@ -73,7 +73,7 @@ impl<W: Write + Seek> WavWriter<W> {
     }
 
     pub fn write_samples(&mut self, samples: &[i16]) -> Result<(), WavError> {
-        if samples.len() % usize::from(self.channels) != 0 {
+        if !samples.len().is_multiple_of(usize::from(self.channels)) {
             return Err(WavError::InvalidSampleCount {
                 channels: usize::from(self.channels),
                 samples: samples.len(),

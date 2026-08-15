@@ -4,10 +4,10 @@ use crate::builtin_neural_model;
 use crate::cnn::{CnnError, ScalarCnnDecoder};
 use crate::feature_scale_tables::{LOW_COMPLEXITY_SCALE_BITS, MAIN_AMPLIFIED_SCALE_BITS};
 use crate::latent::{
-    channel_cdf_indexes_into, unflatten_from_entropy_coder_into, LatentError, LatentShape,
+    LatentError, LatentShape, channel_cdf_indexes_into, unflatten_from_entropy_coder_into,
 };
-use crate::model::{ModelError, NeuralCodecModel, NeuralModel, AVS3_FEATURE_DIMENSIONS};
-use crate::random::{Avs3Random, AVS3_RAND_MAX};
+use crate::model::{AVS3_FEATURE_DIMENSIONS, ModelError, NeuralCodecModel, NeuralModel};
+use crate::random::{AVS3_RAND_MAX, Avs3Random};
 use crate::range_coder::{RangeCoderError, RangeDecoder};
 
 pub const MAX_QC_BITSTREAM_BYTES: usize = 1_024;
@@ -374,6 +374,20 @@ pub struct DecodedNeuralSpectrum<'decoder> {
     diagnostics: NeuralSpectrumDiagnostics,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum PreparedNeuralSpectrum<'a> {
+    Main {
+        input: MainNeuralQc<'a>,
+        context_bytes_consumed: usize,
+        base_bytes_consumed: usize,
+    },
+    LowComplexity {
+        input: LowComplexityNeuralQc<'a>,
+        context_bytes_consumed: usize,
+        base_bytes_consumed: usize,
+    },
+}
+
 impl<'decoder> DecodedNeuralSpectrum<'decoder> {
     pub fn spectrum(&self) -> &'decoder [f32] {
         self.spectrum
@@ -459,8 +473,73 @@ impl<'model> NeuralSpectrumDecoder<'model> {
         input: MainNeuralQc<'_>,
         random: &mut Avs3Random,
     ) -> Result<DecodedNeuralSpectrum<'decoder>, NeuralQcError> {
+        let prepared = self.prepare_main(input)?;
+        self.finish_prepared(prepared, random)
+    }
+
+    pub(crate) fn prepare_main<'a>(
+        &mut self,
+        input: MainNeuralQc<'a>,
+    ) -> Result<PreparedNeuralSpectrum<'a>, NeuralQcError> {
         let (context_bytes_consumed, base_bytes_consumed) =
             self.decode_latents(input.bitstreams)?;
+        Ok(PreparedNeuralSpectrum::Main {
+            input,
+            context_bytes_consumed,
+            base_bytes_consumed,
+        })
+    }
+
+    pub(crate) fn prepare_low_complexity<'a>(
+        &mut self,
+        input: LowComplexityNeuralQc<'a>,
+    ) -> Result<PreparedNeuralSpectrum<'a>, NeuralQcError> {
+        if self.base.latent_shape().len() != AVS3_FEATURE_DIMENSIONS {
+            return Err(NeuralQcError::LowComplexityOutputLength {
+                expected: AVS3_FEATURE_DIMENSIONS,
+                actual: self.base.latent_shape().len(),
+            });
+        }
+        let (context_bytes_consumed, base_bytes_consumed) =
+            self.decode_latents(input.bitstreams)?;
+        Ok(PreparedNeuralSpectrum::LowComplexity {
+            input,
+            context_bytes_consumed,
+            base_bytes_consumed,
+        })
+    }
+
+    pub(crate) fn finish_prepared<'decoder>(
+        &'decoder mut self,
+        prepared: PreparedNeuralSpectrum<'_>,
+        random: &mut Avs3Random,
+    ) -> Result<DecodedNeuralSpectrum<'decoder>, NeuralQcError> {
+        match prepared {
+            PreparedNeuralSpectrum::Main {
+                input,
+                context_bytes_consumed,
+                base_bytes_consumed,
+            } => self.finish_main(input, context_bytes_consumed, base_bytes_consumed, random),
+            PreparedNeuralSpectrum::LowComplexity {
+                input,
+                context_bytes_consumed,
+                base_bytes_consumed,
+            } => self.finish_low_complexity(
+                input,
+                context_bytes_consumed,
+                base_bytes_consumed,
+                random,
+            ),
+        }
+    }
+
+    fn finish_main<'decoder>(
+        &'decoder mut self,
+        input: MainNeuralQc<'_>,
+        context_bytes_consumed: usize,
+        base_bytes_consumed: usize,
+        random: &mut Avs3Random,
+    ) -> Result<DecodedNeuralSpectrum<'decoder>, NeuralQcError> {
         let noise_filling = input.noise_filling;
         let mut noise_dimensions = noise_filling.num_lines;
         for layer in self.base.decoder().layers() {
@@ -491,14 +570,17 @@ impl<'model> NeuralSpectrumDecoder<'model> {
         input: LowComplexityNeuralQc<'_>,
         random: &mut Avs3Random,
     ) -> Result<DecodedNeuralSpectrum<'decoder>, NeuralQcError> {
-        if self.base.latent_shape().len() != AVS3_FEATURE_DIMENSIONS {
-            return Err(NeuralQcError::LowComplexityOutputLength {
-                expected: AVS3_FEATURE_DIMENSIONS,
-                actual: self.base.latent_shape().len(),
-            });
-        }
-        let (context_bytes_consumed, base_bytes_consumed) =
-            self.decode_latents(input.bitstreams)?;
+        let prepared = self.prepare_low_complexity(input)?;
+        self.finish_prepared(prepared, random)
+    }
+
+    fn finish_low_complexity<'decoder>(
+        &'decoder mut self,
+        input: LowComplexityNeuralQc<'_>,
+        context_bytes_consumed: usize,
+        base_bytes_consumed: usize,
+        random: &mut Avs3Random,
+    ) -> Result<DecodedNeuralSpectrum<'decoder>, NeuralQcError> {
         let noise_filling = input.noise_filling;
         let noise_dimensions = noise_filling.num_lines / self.base.latent_shape().channels();
         let noise_parameters = self.apply_noise_filling(noise_filling, noise_dimensions, random)?;
@@ -774,6 +856,57 @@ mod tests {
             .unwrap();
         assert_eq!(lc.spectrum().len(), AVS3_FEATURE_DIMENSIONS);
         assert!(lc.spectrum().iter().all(|value| value.is_finite()));
+    }
+
+    #[test]
+    fn prepared_and_one_shot_paths_are_bit_exact() {
+        let context = [0x84, 0xa0, 0xd8, 0x95, 0xb9, 0xa7];
+        let base = [
+            0x7f, 0xfd, 0x51, 0xf6, 0xf2, 0x24, 0x34, 0xad, 0x04, 0xde, 0x75, 0xcd, 0x9d, 0x0c,
+            0x76, 0xeb, 0xb3, 0x76, 0xaf, 0x47, 0xda, 0x43, 0x33, 0xf0, 0xd4, 0xeb,
+        ];
+        let streams = NeuralBitstreams::new(&context, &base).unwrap();
+        let noise = NoiseFilling::single(720, 5).unwrap();
+
+        let main_input = MainNeuralQc::new(streams, noise, true, 37).unwrap();
+        let mut one_shot = NeuralSpectrumDecoder::new_builtin().unwrap();
+        let mut one_shot_random = Avs3Random::new();
+        let decoded = one_shot
+            .decode_main(main_input, &mut one_shot_random)
+            .unwrap();
+        let expected_spectrum = decoded.spectrum().to_vec();
+        let expected_diagnostics = decoded.diagnostics();
+        let expected_next_random = one_shot_random.next_u31();
+
+        let mut staged = NeuralSpectrumDecoder::new_builtin().unwrap();
+        let mut staged_random = Avs3Random::new();
+        let prepared = staged.prepare_main(main_input).unwrap();
+        let decoded = staged
+            .finish_prepared(prepared, &mut staged_random)
+            .unwrap();
+        assert_eq!(decoded.spectrum(), expected_spectrum);
+        assert_eq!(decoded.diagnostics(), expected_diagnostics);
+        assert_eq!(staged_random.next_u31(), expected_next_random);
+
+        let lc_input = LowComplexityNeuralQc::new(streams, noise, 91);
+        let mut one_shot = NeuralSpectrumDecoder::new_builtin().unwrap();
+        let mut one_shot_random = Avs3Random::new();
+        let decoded = one_shot
+            .decode_low_complexity(lc_input, &mut one_shot_random)
+            .unwrap();
+        let expected_spectrum = decoded.spectrum().to_vec();
+        let expected_diagnostics = decoded.diagnostics();
+        let expected_next_random = one_shot_random.next_u31();
+
+        let mut staged = NeuralSpectrumDecoder::new_builtin().unwrap();
+        let mut staged_random = Avs3Random::new();
+        let prepared = staged.prepare_low_complexity(lc_input).unwrap();
+        let decoded = staged
+            .finish_prepared(prepared, &mut staged_random)
+            .unwrap();
+        assert_eq!(decoded.spectrum(), expected_spectrum);
+        assert_eq!(decoded.diagnostics(), expected_diagnostics);
+        assert_eq!(staged_random.next_u31(), expected_next_random);
     }
 
     #[test]

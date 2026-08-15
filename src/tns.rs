@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::core_side::{TnsSideInfo, TransformType, MAX_TNS_FILTERS, MAX_TNS_ORDER};
+use crate::core_side::{MAX_TNS_FILTERS, MAX_TNS_ORDER, TnsSideInfo, TransformType};
 use crate::model::AVS3_FEATURE_DIMENSIONS;
 use crate::spectrum::SpectrumReorder;
 

@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::latent::{ContextScaleTable, LatentError, LatentShape, Quantizer, MAX_LATENT_CHANNELS};
+use crate::latent::{ContextScaleTable, LatentError, LatentShape, MAX_LATENT_CHANNELS, Quantizer};
 use crate::range_coder::{RangeCoderConfig, RangeCoderError};
 
 pub const AVS3_MODEL_XOR_MASK: u8 = 0x55;
@@ -588,7 +588,7 @@ impl CnnLayer {
                 return Err(ModelError::InvalidField {
                     field: "CNN use-bias flag",
                     value,
-                })
+                });
             }
         };
         let activation = Activation::parse(reader.read_i16()?)?;
@@ -622,7 +622,7 @@ impl CnnLayer {
                 .checked_mul(stride)
                 .ok_or(ModelError::IntegerOverflow)?
         } else {
-            if input_shape.dimensions() % stride != 0 {
+            if !input_shape.dimensions().is_multiple_of(stride) {
                 return Err(ModelError::DimensionNotDivisible {
                     network,
                     layer,

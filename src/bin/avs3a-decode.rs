@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use avs3a::{
-    is_multichannel_config, ChannelConfig, CodecProfile, Decoder, EncodedFrame, FrameHeader,
+    AVS3_FEATURE_DIMENSIONS, ChannelConfig, CodecProfile, Decoder, EncodedFrame, FrameHeader,
     FrameStream, HoaDecoderBackend, McDecoderBackend, MixDecoderBackend, MonoDecoderBackend,
-    PendingDecoder, StereoDecoderBackend, StreamEvent, WavWriter, AVS3_FEATURE_DIMENSIONS,
+    PendingDecoder, StereoDecoderBackend, StreamEvent, WavWriter, is_multichannel_config,
 };
 
 const READ_BUFFER_SIZE: usize = 64 * 1024;

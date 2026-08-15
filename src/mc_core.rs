@@ -1,16 +1,20 @@
 use core::fmt;
 
+use rayon::prelude::*;
+
 use crate::bwe::{BweSynthesis, BweSynthesisError};
 use crate::core_side::{CoreSideInfo, ParsedNeuralQc};
 use crate::fd_shaping::{FdShapingError, FdSpectrumShaping};
-use crate::header::{FrameHeader, NnType, MAX_CHANNELS};
+use crate::header::{FrameHeader, MAX_CHANNELS, NnType};
 use crate::mc::{
-    clear_mc_lfe_spectrum, inverse_mc_coupling, McBitstreamConfig, McError, McSideInfo,
-    McSideInfoDecoder,
+    McBitstreamConfig, McError, McSideInfo, McSideInfoDecoder, clear_mc_lfe_spectrum,
+    inverse_mc_coupling,
 };
 use crate::mdct_synthesis::{MdctSynthesis, MdctSynthesisError};
-use crate::model::{NeuralModel, AVS3_FEATURE_DIMENSIONS};
-use crate::neural_qc::{NeuralQcError, NeuralSpectrumDecoder, NeuralSpectrumDiagnostics};
+use crate::model::{AVS3_FEATURE_DIMENSIONS, NeuralModel};
+use crate::neural_qc::{
+    NeuralQcError, NeuralSpectrumDecoder, NeuralSpectrumDiagnostics, PreparedNeuralSpectrum,
+};
 use crate::random::Avs3Random;
 use crate::spectrum::{SpectrumReorder, SpectrumReorderError};
 use crate::tns::{TnsSynthesis, TnsSynthesisError};
@@ -19,6 +23,7 @@ pub const MC_MAX_FRAME_SAMPLES: usize = AVS3_FEATURE_DIMENSIONS * MAX_CHANNELS a
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum McCoreDecodeError {
+    ThreadPoolBuild,
     InvalidOutputLength { expected: usize, actual: usize },
     MissingCoreSideInformation { channel: usize },
     MissingNeuralSideInformation { channel: usize },
@@ -36,6 +41,7 @@ pub enum McCoreDecodeError {
 impl fmt::Display for McCoreDecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ThreadPoolBuild => f.write_str("failed to build MC neural worker pool"),
             Self::InvalidOutputLength { expected, actual } => write!(
                 f,
                 "multichannel synthesis output has {actual} samples; expected {expected}"
@@ -190,12 +196,13 @@ impl McChannelDsp {
 
 /// Channel-based multichannel payload-to-interleaved-floating-PCM decoder.
 ///
-/// One neural decoder and one PRNG are shared in output-channel order, exactly
-/// like the reference decoder. Per-channel DSP and overlap state is allocated
-/// once at construction, and decoding performs no heap allocation.
+/// Neural workspaces are channel-local so entropy/context decoding can run in
+/// parallel. Noise filling still consumes one PRNG in output-channel order,
+/// exactly like the reference decoder. Construction performs all allocation.
 pub struct McCoreDecoder<'model> {
     side_information: McSideInfoDecoder,
-    neural: NeuralSpectrumDecoder<'model>,
+    neural_pool: rayon::ThreadPool,
+    neural: Vec<NeuralSpectrumDecoder<'model>>,
     channel_dsp: Vec<McChannelDsp>,
     random: Avs3Random,
     spectra: Vec<[f32; AVS3_FEATURE_DIMENSIONS]>,
@@ -207,12 +214,20 @@ impl<'model> McCoreDecoder<'model> {
     pub fn new(model: &'model NeuralModel) -> Result<Self, McCoreDecodeError> {
         let capacity = usize::from(MAX_CHANNELS);
         let mut channel_dsp = Vec::with_capacity(capacity);
+        let mut neural = Vec::with_capacity(capacity);
         for _ in 0..capacity {
             channel_dsp.push(McChannelDsp::new());
+            neural.push(NeuralSpectrumDecoder::new(model)?);
         }
+        let neural_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(neural_worker_count())
+            .thread_name(|index| format!("avs3a-neural-{index}"))
+            .build()
+            .map_err(|_| McCoreDecodeError::ThreadPoolBuild)?;
         Ok(Self {
             side_information: McSideInfoDecoder::new(),
-            neural: NeuralSpectrumDecoder::new(model)?,
+            neural_pool,
+            neural,
             channel_dsp,
             random: Avs3Random::new(),
             spectra: vec![[0.0; AVS3_FEATURE_DIMENSIONS]; capacity],
@@ -272,6 +287,7 @@ impl<'model> McCoreDecoder<'model> {
         let padding_bits = parsed.padding_bits();
         let mut frame_random = self.random.clone();
         let mut cores = [None; MAX_CHANNELS as usize];
+        let mut neural_inputs = [None; MAX_CHANNELS as usize];
         let mut neural_diagnostics = [None; MAX_CHANNELS as usize];
         let mut entropy_bytes = [0_usize; MAX_CHANNELS as usize];
         entropy_bytes[..channels].copy_from_slice(allocation.channel_bytes());
@@ -283,24 +299,51 @@ impl<'model> McCoreDecoder<'model> {
             let neural_qc = parsed
                 .neural_qc(channel)
                 .ok_or(McCoreDecodeError::MissingNeuralSideInformation { channel })?;
-            let decoded = match neural_qc {
-                ParsedNeuralQc::Main(input) if header.nn_type == NnType::Main => {
-                    self.neural.decode_main(input, &mut frame_random)?
-                }
-                ParsedNeuralQc::LowComplexity(input) if header.nn_type == NnType::LowComplexity => {
-                    self.neural
-                        .decode_low_complexity(input, &mut frame_random)?
-                }
-                _ => return Err(McCoreDecodeError::UnexpectedNeuralProfile { channel }),
-            };
+            cores[channel] = Some(core);
+            neural_inputs[channel] = Some(neural_qc);
+        }
+
+        let mut prepared: [Option<Result<PreparedNeuralSpectrum<'_>, McCoreDecodeError>>;
+            MAX_CHANNELS as usize] = core::array::from_fn(|_| None);
+        self.neural_pool.install(|| {
+            prepared[..channels]
+                .par_iter_mut()
+                .zip(self.neural[..channels].par_iter_mut())
+                .enumerate()
+                .for_each(|(channel, (slot, decoder))| {
+                    let result = match neural_inputs[channel]
+                        .expect("all active neural side information was validated")
+                    {
+                        ParsedNeuralQc::Main(input) if header.nn_type == NnType::Main => {
+                            decoder.prepare_main(input).map_err(McCoreDecodeError::from)
+                        }
+                        ParsedNeuralQc::LowComplexity(input)
+                            if header.nn_type == NnType::LowComplexity =>
+                        {
+                            decoder
+                                .prepare_low_complexity(input)
+                                .map_err(McCoreDecodeError::from)
+                        }
+                        _ => Err(McCoreDecodeError::UnexpectedNeuralProfile { channel }),
+                    };
+                    *slot = Some(result);
+                });
+        });
+
+        for channel in 0..channels {
+            let prepared = prepared[channel]
+                .take()
+                .expect("every active channel produced a preparation result")?;
+            let decoded = self.neural[channel].finish_prepared(prepared, &mut frame_random)?;
             neural_diagnostics[channel] = Some(decoded.diagnostics());
             self.spectra[channel].copy_from_slice(decoded.spectrum());
+            let core =
+                cores[channel].ok_or(McCoreDecodeError::MissingCoreSideInformation { channel })?;
             self.channel_dsp[channel].reorder.degroup(
                 core.grouping(),
                 core.transform_type(),
                 &mut self.spectra[channel],
             )?;
-            cores[channel] = Some(core);
         }
 
         inverse_mc_coupling(&mut self.spectra[..channels], mc, config)?;
@@ -366,6 +409,18 @@ impl McCoreDecoder<'static> {
         let model = crate::builtin_neural_model().map_err(NeuralQcError::from)?;
         Self::new(model)
     }
+}
+
+fn neural_worker_count() -> usize {
+    std::env::var("RAYON_NUM_THREADS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|&value| value != 0)
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|value| value.get().div_ceil(2).min(8))
+                .unwrap_or(1)
+        })
 }
 
 impl fmt::Debug for McCoreDecoder<'_> {
@@ -466,9 +521,11 @@ mod tests {
         assert_eq!(diagnostics.padding_bits(), 0);
         assert!(output.iter().all(|sample| sample.is_finite()));
         let spectra = decoder.last_shaped_spectra();
-        assert!(spectra[3][crate::MC_LFE_RESERVED_LINES..]
-            .iter()
-            .all(|&value| value == 0.0));
+        assert!(
+            spectra[3][crate::MC_LFE_RESERVED_LINES..]
+                .iter()
+                .all(|&value| value == 0.0)
+        );
     }
 
     #[test]

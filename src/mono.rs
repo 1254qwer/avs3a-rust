@@ -6,7 +6,7 @@ use crate::core_side::{
 };
 use crate::fd_shaping::{FdShapingError, FdSpectrumShaping};
 use crate::mdct_synthesis::{MdctSynthesis, MdctSynthesisError};
-use crate::model::{NeuralModel, AVS3_FEATURE_DIMENSIONS};
+use crate::model::{AVS3_FEATURE_DIMENSIONS, NeuralModel};
 use crate::neural_qc::{NeuralQcError, NeuralSpectrumDecoder, NeuralSpectrumDiagnostics};
 use crate::random::Avs3Random;
 use crate::spectrum::{SpectrumReorder, SpectrumReorderError};

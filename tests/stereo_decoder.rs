@@ -1,6 +1,6 @@
 use avs3a::{
-    crc16, BitReader, BitWriter, ChannelConfig, FrameStream, MetadataPayloadParser, PendingDecoder,
-    StereoDecoderBackend, StreamEvent,
+    BitReader, BitWriter, ChannelConfig, FrameStream, MetadataPayloadParser, PendingDecoder,
+    StereoDecoderBackend, StreamEvent, crc16,
 };
 
 mod support;

@@ -1,6 +1,6 @@
 use avs3a::{
-    crc16, BitReader, BitWriter, ChannelConfig, DecodeError, FrameStream, MonoDecoderBackend,
-    PendingDecoder, StreamEvent, TransformType,
+    BitReader, BitWriter, ChannelConfig, DecodeError, FrameStream, MonoDecoderBackend,
+    PendingDecoder, StreamEvent, TransformType, crc16,
 };
 
 const SAMPLE_RATE_INDEX_96_KHZ: u64 = 1;

@@ -2,7 +2,7 @@ use core::fmt;
 
 use crate::core_side::{TransformType, WindowGrouping};
 use crate::model::AVS3_FEATURE_DIMENSIONS;
-use crate::neural_qc::{NoiseGroup, AVS3_SHORT_BLOCKS};
+use crate::neural_qc::{AVS3_SHORT_BLOCKS, NoiseGroup};
 
 const SHORT_BLOCK_LINES: usize = AVS3_FEATURE_DIMENSIONS / AVS3_SHORT_BLOCKS;
 

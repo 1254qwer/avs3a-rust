@@ -5,10 +5,10 @@ use crate::metadata::{MetadataPayloadParser, MetadataSummary};
 use crate::metadata_values::FrameMetadata;
 use crate::model::AVS3_FEATURE_DIMENSIONS;
 use crate::mono_backend::float_to_pcm16;
-use crate::stereo::{StereoCodingMode, STEREO_CHANNELS};
+use crate::stereo::{STEREO_CHANNELS, StereoCodingMode};
 use crate::stereo_core::{
-    McrCoreDiagnostics, StereoCoreDecodeError, StereoCoreDecoder, StereoCoreDiagnostics,
-    STEREO_FRAME_SAMPLES,
+    McrCoreDiagnostics, STEREO_FRAME_SAMPLES, StereoCoreDecodeError, StereoCoreDecoder,
+    StereoCoreDiagnostics,
 };
 
 /// Public PCM16 backend for channel-based stereo AVS3 frames.

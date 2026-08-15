@@ -49,69 +49,68 @@ mod wav;
 
 pub use bitstream::{BitReader, BitWriter};
 pub use builtin_model::{
-    builtin_model_bytes, builtin_neural_model, BUILTIN_MODEL_FNV1A, BUILTIN_MODEL_LEN,
+    BUILTIN_MODEL_FNV1A, BUILTIN_MODEL_LEN, builtin_model_bytes, builtin_neural_model,
 };
 pub use bwe::{BweSynthesis, BweSynthesisError};
-pub use cnn::{CnnError, ScalarCnnDecoder, MAX_CNN_WORKSPACE_VALUES};
+pub use cnn::{CnnError, MAX_CNN_WORKSPACE_VALUES, ScalarCnnDecoder};
 pub use core_side::{
     BweConfig, BweSideInfo, BweWhiteningLevel, CoreBitstreamConfig, CoreBitstreamError,
-    CoreSideInfo, LsfCodebookMode, LsfSideInfo, MonoFrameSideInfo, MonoSideInfoDecoder,
+    CoreSideInfo, LsfCodebookMode, LsfSideInfo, MAX_BWE_SCALE_FACTOR_BANDS, MAX_BWE_TILES,
+    MAX_LSF_CODEBOOKS, MAX_TNS_FILTERS, MAX_TNS_ORDER, MonoFrameSideInfo, MonoSideInfoDecoder,
     ParsedNeuralQc, TnsCoefficient, TnsFilterSideInfo, TnsSideInfo, TransformType, WindowGrouping,
-    MAX_BWE_SCALE_FACTOR_BANDS, MAX_BWE_TILES, MAX_LSF_CODEBOOKS, MAX_TNS_FILTERS, MAX_TNS_ORDER,
 };
 pub use decoder::{AudioFrame, Decoder, DecoderBackend, DecoderConfig, PendingDecoder};
 pub use error::{BitstreamError, DecodeError, HeaderError, StreamError, WavError};
 pub use fd_shaping::{
-    fd_table_bytes, FdShapingError, FdSpectrumShaping, FD_TABLE_BYTES_LEN, FD_TABLE_FNV1A,
-    FD_TABLE_VALUES,
+    FD_TABLE_BYTES_LEN, FD_TABLE_FNV1A, FD_TABLE_VALUES, FdShapingError, FdSpectrumShaping,
+    fd_table_bytes,
 };
 pub use header::{
-    AudioCodecId, BitDepth, ChannelConfig, CodecProfile, FrameHeader, HeaderInfo, NnType,
-    SoundBedType, MAX_CHANNELS, MAX_HEADER_BYTES, MAX_PAYLOAD_BYTES,
+    AudioCodecId, BitDepth, ChannelConfig, CodecProfile, FrameHeader, HeaderInfo, MAX_CHANNELS,
+    MAX_HEADER_BYTES, MAX_PAYLOAD_BYTES, NnType, SoundBedType,
 };
 pub use hoa::{
-    hoa_bytes_allocation, hoa_pair_from_index, hoa_pair_index_bits, inverse_hoa_dmx,
+    HOA_BASIS_INDEX_BITS, HOA_BASIS_TABLE_LEN, HOA_SFB_BOUNDARIES, HOA_SFB_COUNT,
     HoaBitstreamConfig, HoaByteAllocation, HoaDmxMode, HoaError, HoaFrameSideInfo, HoaGroupConfig,
-    HoaGroupSideInfo, HoaPairSideInfo, HoaSideInfo, HoaSideInfoDecoder, HOA_BASIS_INDEX_BITS,
-    HOA_BASIS_TABLE_LEN, HOA_SFB_BOUNDARIES, HOA_SFB_COUNT, MAX_HOA_BASIS, MAX_HOA_GROUPS,
-    MAX_HOA_GROUP_PAIRS,
+    HoaGroupSideInfo, HoaPairSideInfo, HoaSideInfo, HoaSideInfoDecoder, MAX_HOA_BASIS,
+    MAX_HOA_GROUP_PAIRS, MAX_HOA_GROUPS, hoa_bytes_allocation, hoa_pair_from_index,
+    hoa_pair_index_bits, inverse_hoa_dmx,
 };
 pub use hoa_backend::HoaDecoderBackend;
-pub use hoa_core::{HoaCoreDecodeError, HoaCoreDecoder, HoaCoreDiagnostics, HOA_MAX_FRAME_SAMPLES};
+pub use hoa_core::{HOA_MAX_FRAME_SAMPLES, HoaCoreDecodeError, HoaCoreDecoder, HoaCoreDiagnostics};
 pub use hoa_synthesis::{
-    hoa_basis_coefficients, hoa_spatial_table_bytes, HoaPostSynthesis, HoaPostSynthesisError,
     HOA_FRAME_SAMPLES, HOA_OVERLAP_SIZE, HOA_POST_TRANSFORM_LEN, HOA_SPATIAL_TABLE_BYTES_LEN,
-    HOA_SPATIAL_TABLE_FNV1A,
+    HOA_SPATIAL_TABLE_FNV1A, HoaPostSynthesis, HoaPostSynthesisError, hoa_basis_coefficients,
+    hoa_spatial_table_bytes,
 };
 pub use imdct::{FastImdct, ImdctError};
 pub use latent::{
-    channel_cdf_indexes, channel_cdf_indexes_into, flatten_for_entropy_coder,
-    flatten_for_entropy_coder_into, unflatten_from_entropy_coder,
-    unflatten_from_entropy_coder_into, ContextScaleTable, LatentError, LatentShape, Quantizer,
-    MAX_LATENT_CHANNELS, MAX_LATENT_DIMENSIONS, MAX_LATENT_VALUES,
+    ContextScaleTable, LatentError, LatentShape, MAX_LATENT_CHANNELS, MAX_LATENT_DIMENSIONS,
+    MAX_LATENT_VALUES, Quantizer, channel_cdf_indexes, channel_cdf_indexes_into,
+    flatten_for_entropy_coder, flatten_for_entropy_coder_into, unflatten_from_entropy_coder,
+    unflatten_from_entropy_coder_into,
 };
 pub use mc::{
-    apply_mc_ild, clear_mc_lfe_spectrum, inverse_mc_coupling, inverse_mc_pair,
-    is_multichannel_config, mc_bytes_allocation, mc_coupling_channel_to_output,
-    mc_output_channel_to_coupling, mc_pair_from_index, mc_pair_index_bits, McBitstreamConfig,
-    McByteAllocation, McError, McFrameSideInfo, McPair, McSideInfo, McSideInfoDecoder,
     MAX_MC_PAIRS, MC_ILD_CODEBOOK, MC_ILD_CODEBOOK_LEN, MC_LFE_CHANNEL_INDEX,
-    MC_LFE_RESERVED_LINES, MC_NO_ILD_INDEX, MC_SILENCE_BYTES,
+    MC_LFE_RESERVED_LINES, MC_NO_ILD_INDEX, MC_SILENCE_BYTES, McBitstreamConfig, McByteAllocation,
+    McError, McFrameSideInfo, McPair, McSideInfo, McSideInfoDecoder, apply_mc_ild,
+    clear_mc_lfe_spectrum, inverse_mc_coupling, inverse_mc_pair, is_multichannel_config,
+    mc_bytes_allocation, mc_coupling_channel_to_output, mc_output_channel_to_coupling,
+    mc_pair_from_index, mc_pair_index_bits,
 };
 pub use mc_backend::McDecoderBackend;
-pub use mc_core::{McCoreDecodeError, McCoreDecoder, McCoreDiagnostics, MC_MAX_FRAME_SAMPLES};
+pub use mc_core::{MC_MAX_FRAME_SAMPLES, McCoreDecodeError, McCoreDecoder, McCoreDiagnostics};
 pub use mcr::{
-    mcr_rotation_bytes, McrError, McrSideInfo, McrSynthesis, MCR_LONG_CODEBOOK_ENTRIES,
-    MCR_LONG_INDEX_BITS, MCR_ROTATION_BYTES_LEN, MCR_ROTATION_FNV1A, MCR_ROTATION_VALUES,
-    MCR_SCALE_FACTOR_BANDS, MCR_SHORT_CODEBOOK_ENTRIES, MCR_SHORT_INDEX_BITS, MCR_SUBSPECTRA,
-    MCR_SUBVECTORS, MCR_SUBVECTOR_DIMENSIONS,
+    MCR_LONG_CODEBOOK_ENTRIES, MCR_LONG_INDEX_BITS, MCR_ROTATION_BYTES_LEN, MCR_ROTATION_FNV1A,
+    MCR_ROTATION_VALUES, MCR_SCALE_FACTOR_BANDS, MCR_SHORT_CODEBOOK_ENTRIES, MCR_SHORT_INDEX_BITS,
+    MCR_SUBSPECTRA, MCR_SUBVECTOR_DIMENSIONS, MCR_SUBVECTORS, McrError, McrSideInfo, McrSynthesis,
+    mcr_rotation_bytes,
 };
 pub use mdct::{FastMdct, MdctError};
 pub use mdct_synthesis::{MdctSynthesis, MdctSynthesisError};
 pub use metadata::{
-    DynamicMetadataSummary, MetadataError, MetadataPayloadParser, MetadataSummary,
-    ParsedMetadataPayload, StaticMetadataSummary, MAX_DYNAMIC_METADATA_OBJECTS,
-    METADATA_PRESENCE_BITS,
+    DynamicMetadataSummary, MAX_DYNAMIC_METADATA_OBJECTS, METADATA_PRESENCE_BITS, MetadataError,
+    MetadataPayloadParser, MetadataSummary, ParsedMetadataPayload, StaticMetadataSummary,
 };
 pub use metadata_values::{
     AudioChannelMetadata, AudioContentMetadata, AudioObjectInteractionMetadata,
@@ -127,30 +126,31 @@ pub use metadata_values::{
 };
 pub use mix_backend::{MixCoreKind, MixDecoderBackend};
 pub use model::{
-    Activation, CnnLayer, CnnNetwork, GdnParameters, ModelEncoding, ModelError, ModelLimits,
-    ModelReader, NeuralCodecModel, NeuralModel, NeuralModelType, Padding, AVS3_FEATURE_DIMENSIONS,
-    AVS3_MODEL_XOR_MASK, DEFAULT_MAX_KERNEL_SIZE, DEFAULT_MAX_MODEL_BYTES,
-    DEFAULT_MAX_MODEL_CHANNELS, DEFAULT_MAX_MODEL_LAYERS, DEFAULT_MAX_MODEL_VALUES,
+    AVS3_FEATURE_DIMENSIONS, AVS3_MODEL_XOR_MASK, Activation, CnnLayer, CnnNetwork,
+    DEFAULT_MAX_KERNEL_SIZE, DEFAULT_MAX_MODEL_BYTES, DEFAULT_MAX_MODEL_CHANNELS,
+    DEFAULT_MAX_MODEL_LAYERS, DEFAULT_MAX_MODEL_VALUES, GdnParameters, ModelEncoding, ModelError,
+    ModelLimits, ModelReader, NeuralCodecModel, NeuralModel, NeuralModelType, Padding,
 };
 pub use mono::{MonoCoreDecodeError, MonoCoreDecoder, MonoCoreDiagnostics};
-pub use mono_backend::{float_to_pcm16, MonoDecoderBackend};
+pub use mono_backend::{MonoDecoderBackend, float_to_pcm16};
 pub use neural_qc::{
-    DecodedNeuralSpectrum, LowComplexityNeuralQc, MainNeuralQc, NeuralBitstreams, NeuralQcError,
-    NeuralSpectrumDecoder, NeuralSpectrumDiagnostics, NoiseFilling, NoiseGroup, AVS3_NOISE_GROUPS,
-    AVS3_SHORT_BLOCKS, MAX_MAIN_SCALE_INDEX, MAX_NOISE_FILLING_INDEX, MAX_QC_BITSTREAM_BYTES,
+    AVS3_NOISE_GROUPS, AVS3_SHORT_BLOCKS, DecodedNeuralSpectrum, LowComplexityNeuralQc,
+    MAX_MAIN_SCALE_INDEX, MAX_NOISE_FILLING_INDEX, MAX_QC_BITSTREAM_BYTES, MainNeuralQc,
+    NeuralBitstreams, NeuralQcError, NeuralSpectrumDecoder, NeuralSpectrumDiagnostics,
+    NoiseFilling, NoiseGroup,
 };
-pub use random::{Avs3Random, AVS3_RAND_MAX};
+pub use random::{AVS3_RAND_MAX, Avs3Random};
 pub use range_coder::{RangeCoderConfig, RangeCoderError, RangeDecoder};
 pub use spectrum::{SpectrumReorder, SpectrumReorderError};
 pub use stereo::{
-    inverse_mid_side, stereo_bytes_allocation, McrFrameSideInfo, StereoCodingMode, StereoError,
-    StereoFrameSideInfo, StereoSideInfo, StereoSideInfoDecoder, STEREO_CHANNELS,
-    STEREO_MCR_BITRATE_THRESHOLD,
+    McrFrameSideInfo, STEREO_CHANNELS, STEREO_MCR_BITRATE_THRESHOLD, StereoCodingMode, StereoError,
+    StereoFrameSideInfo, StereoSideInfo, StereoSideInfoDecoder, inverse_mid_side,
+    stereo_bytes_allocation,
 };
 pub use stereo_backend::StereoDecoderBackend;
 pub use stereo_core::{
-    McrCoreDiagnostics, StereoCoreDecodeError, StereoCoreDecoder, StereoCoreDiagnostics,
-    STEREO_FRAME_SAMPLES,
+    McrCoreDiagnostics, STEREO_FRAME_SAMPLES, StereoCoreDecodeError, StereoCoreDecoder,
+    StereoCoreDiagnostics,
 };
 pub use stream::{EncodedFrame, FrameStream, StreamEvent};
 pub use tns::{TnsSynthesis, TnsSynthesisError};

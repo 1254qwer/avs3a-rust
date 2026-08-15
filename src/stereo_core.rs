@@ -6,12 +6,12 @@ use crate::fd_shaping::{FdShapingError, FdSpectrumShaping};
 use crate::header::{FrameHeader, NnType};
 use crate::mcr::{McrError, McrSideInfo, McrSynthesis};
 use crate::mdct_synthesis::{MdctSynthesis, MdctSynthesisError};
-use crate::model::{NeuralModel, AVS3_FEATURE_DIMENSIONS};
+use crate::model::{AVS3_FEATURE_DIMENSIONS, NeuralModel};
 use crate::neural_qc::{NeuralQcError, NeuralSpectrumDecoder, NeuralSpectrumDiagnostics};
 use crate::random::Avs3Random;
 use crate::spectrum::{SpectrumReorder, SpectrumReorderError};
 use crate::stereo::{
-    inverse_mid_side, StereoError, StereoSideInfo, StereoSideInfoDecoder, STEREO_CHANNELS,
+    STEREO_CHANNELS, StereoError, StereoSideInfo, StereoSideInfoDecoder, inverse_mid_side,
 };
 use crate::tns::{TnsSynthesis, TnsSynthesisError};
 
@@ -446,8 +446,8 @@ impl fmt::Debug for StereoCoreDecoder<'_> {
 mod tests {
     use super::*;
     use crate::{
-        float_to_pcm16, AudioCodecId, BitDepth, BitWriter, ChannelConfig, CodecProfile,
-        TransformType,
+        AudioCodecId, BitDepth, BitWriter, ChannelConfig, CodecProfile, TransformType,
+        float_to_pcm16,
     };
 
     fn header() -> FrameHeader {
