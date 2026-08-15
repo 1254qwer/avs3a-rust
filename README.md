@@ -166,6 +166,16 @@ Mix 端到端对照覆盖 64 kbps 单对象、32 kbps 双对象 MCR，以及 384
 
 FFT 热路径使用成熟的 `rustfft 6.4.1`（MIT OR Apache-2.0，MSRV 1.61，默认 AVX/SSE/NEON）。codec-specific pre/post twiddle、归一化和布局仍由本仓库实现。它与 C 的标量 radix-2 运算顺序不同，因此不宣称逐位一致；完整 IMDCT 向量的最大绝对误差为 `3.58e-7`（N=256）、`4.77e-7`（N=1024）、`8.64e-7`（N=2048），对应峰值相对误差不超过 `3.28e-7`。完整构造 Main mono payload 的最终浮点 PCM、clipping 与 PRNG 下一项也已和 C 对拍。
 
+RustFFT 会在运行时为 x86-64 选择 AVX/SSE、为 AArch64 选择 NEON；两组 SIMD kernel 的浮点累加顺序不同，但同一架构上的 Linux、Windows、macOS 和 Android 结果稳定。涉及完整 FFT 链路的回归测试因此分别维护 x86-64 与 AArch64 精确 fingerprint，仍使用 `assert_eq!`；未建立基线的新架构会明确失败，不会退化成有限值或非静音检查。Linux AArch64 数值路径可在 QEMU 下预检，原生 GitHub runner 继续作为各操作系统 CPU 路径的最终验证：
+
+```bash
+docker run --rm --platform linux/arm64 \
+  --mount type=bind,src="$PWD",dst=/work,readonly \
+  -w /work -e CARGO_TARGET_DIR=/tmp/avs3a-target \
+  rust:1.96-slim-bookworm \
+  cargo test --all-targets --locked --no-fail-fast
+```
+
 ## 迁移顺序
 
 1. ~~Range coder 与 C 对照向量。~~ 已完成解码路径和模型 CDF 加载。

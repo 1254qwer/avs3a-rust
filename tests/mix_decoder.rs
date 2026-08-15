@@ -5,6 +5,10 @@ use avs3a::{
     MC_LFE_RESERVED_LINES,
 };
 
+mod support;
+
+use support::expected_rustfft_fingerprint;
+
 const CONTEXT: [u8; 6] = [0x84, 0xa0, 0xd8, 0x95, 0xb9, 0xa7];
 const BASE: [u8; 26] = [
     0x7f, 0xfd, 0x51, 0xf6, 0xf2, 0x24, 0x34, 0xad, 0x04, 0xde, 0x75, 0xcd, 0x9d, 0x0c, 0x76, 0xeb,
@@ -330,7 +334,10 @@ fn object_only_mix_dispatches_to_mono_core() {
             .entropy_bytes(),
         51
     );
-    assert_eq!(pcm_fingerprint(audio.samples()), 0xba61_f453_9d48_5862);
+    assert_eq!(
+        pcm_fingerprint(audio.samples()),
+        expected_rustfft_fingerprint(0xba61_f453_9d48_5862, 0x7f23_d010_f66f_1695)
+    );
 }
 
 #[test]
@@ -352,7 +359,10 @@ fn two_object_mix_uses_low_bitrate_mcr() {
     let stereo = decoder.backend().stereo_backend().unwrap();
     assert!(stereo.last_diagnostics().is_none());
     assert_eq!(stereo.last_mcr_diagnostics().unwrap().entropy_bytes(), 47);
-    assert_eq!(pcm_fingerprint(audio.samples()), 0x291b_df9d_9077_9ad0);
+    assert_eq!(
+        pcm_fingerprint(audio.samples()),
+        expected_rustfft_fingerprint(0x291b_df9d_9077_9ad0, 0xdf7d_c254_a177_6513)
+    );
 }
 
 #[test]

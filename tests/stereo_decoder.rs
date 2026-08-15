@@ -3,6 +3,10 @@ use avs3a::{
     StereoDecoderBackend, StreamEvent,
 };
 
+mod support;
+
+use support::expected_rustfft_fingerprint;
+
 fn write_core_prefix(writer: &mut BitWriter, lsf: [u64; 5], envelopes: [u64; 6]) {
     writer.write_bits(1, 2).unwrap();
     for (value, width) in lsf.into_iter().zip([8, 8, 7, 7, 6]) {
@@ -263,7 +267,10 @@ fn public_framing_crc_and_mcr_stereo_backend_decode_payload() {
     let diagnostics = decoder.backend().last_mcr_diagnostics().unwrap();
     assert_eq!(diagnostics.entropy_bytes(), 40);
     assert_eq!(diagnostics.padding_bits(), 7);
-    assert_eq!(pcm_fingerprint(audio.samples()), 0x291b_df9d_9077_9ad0);
+    assert_eq!(
+        pcm_fingerprint(audio.samples()),
+        expected_rustfft_fingerprint(0x291b_df9d_9077_9ad0, 0xdf7d_c254_a177_6513)
+    );
 }
 
 #[test]

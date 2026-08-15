@@ -3,6 +3,10 @@ use avs3a::{
     PendingDecoder, StreamEvent, AVS3_FEATURE_DIMENSIONS,
 };
 
+mod support;
+
+use support::expected_rustfft_fingerprint;
+
 const FOA_AUDIO_BITS: usize = 4_038;
 const FOA_FRAME_PAYLOAD_BITS: usize = FOA_AUDIO_BITS + 2;
 const FOA_CHANNELS: usize = 4;
@@ -308,10 +312,17 @@ fn hoa3_spatial_pipeline_uses_nine_transports_and_two_frame_basis_delay() {
     assert_eq!(decoder.frame_index(), 3);
     assert_eq!(
         fingerprints,
-        [
-            0xe3ee_95db_af37_11f4,
-            0x703d_2b13_3c8a_88f4,
-            0x22ae_e220_dd46_d44e,
-        ]
+        expected_rustfft_fingerprint(
+            [
+                0xe3ee_95db_af37_11f4,
+                0x703d_2b13_3c8a_88f4,
+                0x22ae_e220_dd46_d44e,
+            ],
+            [
+                0x4c17_2195_be5f_d671,
+                0x831e_ca86_e8cc_edc0,
+                0x8225_75ad_bd13_8884,
+            ],
+        )
     );
 }

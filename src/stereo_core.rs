@@ -584,6 +584,39 @@ mod tests {
             })
     }
 
+    /// RustFFT's automatic planner is deliberately architecture-specific.
+    /// Keep an exact baseline for every architecture used by CI instead of
+    /// treating the SIMD result as if it were the scalar C FFT.
+    #[cfg(target_arch = "x86_64")]
+    fn short_mcr_fingerprint_baseline() -> [u64; 4] {
+        [
+            0xc5fd_6984_de2a_265b,
+            0xd1f0_c0eb_b745_3453,
+            0x7515_3048_77e6_198f,
+            0x291b_df9d_9077_9ad0,
+        ]
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn short_mcr_fingerprint_baseline() -> [u64; 4] {
+        // Stable RustFFT 6.4.1 NEON output reproduced by Android and Linux,
+        // macOS and Windows AArch64 CI.
+        [
+            0xd81e_4999_9fcd_2ad4,
+            0xa4ca_e75c_01e5_1ffb,
+            0x8e50_4505_bdb3_9357,
+            0xdf7d_c254_a177_6513,
+        ]
+    }
+
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    fn short_mcr_fingerprint_baseline() -> [u64; 4] {
+        panic!(
+            "no strict RustFFT fingerprint baseline for target architecture {}",
+            std::env::consts::ARCH
+        );
+    }
+
     #[test]
     fn stereo_neural_degroup_ms_and_bwe_order_is_bit_exact_with_c() {
         let header = header();
@@ -774,20 +807,13 @@ mod tests {
                 );
             }
         }
-        assert_eq!(
-            [
-                fingerprint(&spectra[0]),
-                fingerprint(&spectra[1]),
-                fingerprint(&output),
-                pcm_fingerprint(&pcm),
-            ],
-            [
-                0xc5fd_6984_de2a_265b,
-                0xd1f0_c0eb_b745_3453,
-                0x7515_3048_77e6_198f,
-                0x291b_df9d_9077_9ad0,
-            ]
-        );
+        let actual = [
+            fingerprint(&spectra[0]),
+            fingerprint(&spectra[1]),
+            fingerprint(&output),
+            pcm_fingerprint(&pcm),
+        ];
+        assert_eq!(actual, short_mcr_fingerprint_baseline());
     }
 
     #[test]
