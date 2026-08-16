@@ -67,60 +67,114 @@ jobs:
           - name: Linux arm64
             runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+          - name: macOS x86_64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - name: macOS arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+          - name: Windows x86_64
+            runner: windows-2025
+            target: x86_64-pc-windows-msvc
+          - name: Windows arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
     runs-on: ${{ matrix.runner }}
     env:
       RAYON_NUM_THREADS: 4
       RUSTFLAGS: -C target-cpu=native
+      PLATFORM_NAME: ${{ matrix.name }}
+      TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
       - name: Build release decoder
         run: cargo build --release --locked --bin avs3a-decode --target ${{ matrix.target }}
       - name: Decode real 7.1.4 sample three times
-        shell: bash
+        shell: python
         run: |
-          set -euo pipefail
-          binary="target/${{ matrix.target }}/release/avs3a-decode"
-          sample="tests/fixtures/test.av3a"
-          times=()
-          for run in 1 2 3; do
-            log="$RUNNER_TEMP/avs3a-log-$run.txt"
-            start_ns="$(date +%s%N)"
-            "$binary" "$sample" /dev/null >"$log"
-            end_ns="$(date +%s%N)"
-            grep -q '^frames: 8701$' "$log"
-            elapsed="$(awk -v start="$start_ns" -v end="$end_ns" \
-              'BEGIN { printf "%.3f", (end - start) / 1000000000 }')"
-            times+=("$elapsed")
-          done
-          median="$(printf '%s\n' "${times[@]}" | sort -n | sed -n '2p')"
-          throughput="$(awk -v seconds="$median" 'BEGIN { printf "%.2f", 8701 / seconds }')"
-          realtime="$(awk -v seconds="$median" 'BEGIN { printf "%.2f", (8701 * 1024 / 44100) / seconds }')"
-          validation_wav="$RUNNER_TEMP/avs3a-validation.wav"
-          validation_log="$RUNNER_TEMP/avs3a-validation.log"
-          "$binary" "$sample" "$validation_wav" >"$validation_log"
-          grep -q '^frames: 8701$' "$validation_log"
-          input_sha256="$(sha256sum "$sample" | awk '{ print $1 }')"
-          wav_sha256="$(sha256sum "$validation_wav" | awk '{ print $1 }')"
-          pcm_sha256="$(tail -c +45 "$validation_wav" | sha256sum | awk '{ print $1 }')"
-          wav_bytes="$(stat -c '%s' "$validation_wav")"
-          printf 'input_sha256=%s\nwav_sha256=%s\npcm_sha256=%s\nwav_bytes=%s\n' \
-            "$input_sha256" "$wav_sha256" "$pcm_sha256" "$wav_bytes"
-          {
-            echo "### Real AVS3 sample timing"
-            echo
-            echo "| Runner | Threads | Runs (s) | Median (s) | Frames/s | Realtime |"
-            echo "| --- | ---: | --- | ---: | ---: | ---: |"
-            printf '| %s | %s | %s, %s, %s | %s | %s | %sx |\n' \
-              '${{ matrix.name }}' "$RAYON_NUM_THREADS" \
-              "${times[0]}" "${times[1]}" "${times[2]}" \
-              "$median" "$throughput" "$realtime"
-            echo
-            echo "| Artifact | Bytes | SHA-256 |"
-            echo "| --- | ---: | --- |"
-            printf '| Input AV3A | %s | `%s` |\n' "$(stat -c '%s' "$sample")" "$input_sha256"
-            printf '| Output WAV | %s | `%s` |\n' "$wav_bytes" "$wav_sha256"
-            printf '| PCM16 payload | %s | `%s` |\n' "$((wav_bytes - 44))" "$pcm_sha256"
-          } >> "$GITHUB_STEP_SUMMARY"
+          import hashlib
+          import os
+          import pathlib
+          import re
+          import statistics
+          import subprocess
+          import tempfile
+          import time
+
+          target = os.environ["TARGET"]
+          root = pathlib.Path.cwd()
+          binary_name = "avs3a-decode.exe" if os.name == "nt" else "avs3a-decode"
+          binary = root / "target" / target / "release" / binary_name
+          sample = root / "tests" / "fixtures" / "test.av3a"
+          frames = 8701
+          frame_samples = 1024
+          sample_rate = 44100
+
+          def run_decoder(output):
+              completed = subprocess.run(
+                  [str(binary), str(sample), str(output)],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              if not re.search(r"^frames: 8701$", completed.stdout, re.MULTILINE):
+                  raise RuntimeError(f"decoder did not report {frames} frames:\n{completed.stdout}")
+
+          def sha256(path, payload=False):
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  if payload:
+                      stream.seek(44)
+                  for block in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(block)
+              return digest.hexdigest()
+
+          with tempfile.TemporaryDirectory() as temporary:
+              temporary = pathlib.Path(temporary)
+              times = []
+              for index in range(3):
+                  output = temporary / f"timed-{index}.wav"
+                  started = time.perf_counter()
+                  run_decoder(output)
+                  times.append(time.perf_counter() - started)
+                  output.unlink()
+
+              validation_wav = temporary / "validation.wav"
+              run_decoder(validation_wav)
+              input_sha256 = sha256(sample)
+              wav_sha256 = sha256(validation_wav)
+              pcm_sha256 = sha256(validation_wav, payload=True)
+              wav_bytes = validation_wav.stat().st_size
+
+          average = statistics.mean(times)
+          median = statistics.median(times)
+          throughput = frames / median
+          realtime = (frames * frame_samples / sample_rate) / median
+          summary = os.environ["GITHUB_STEP_SUMMARY"]
+          with open(summary, "a", encoding="utf-8") as report:
+              report.write("### Real AVS3 sample timing\n\n")
+              report.write("| Platform | Threads | Run 1 (s) | Run 2 (s) | Run 3 (s) | Average (s) | Median (s) | Min (s) | Max (s) | Frames/s | Realtime |\n")
+              report.write("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+              report.write(
+                  f"| {os.environ['PLATFORM_NAME']} | {os.environ['RAYON_NUM_THREADS']} | "
+                  f"{times[0]:.3f} | {times[1]:.3f} | {times[2]:.3f} | "
+                  f"{average:.3f} | {median:.3f} | {min(times):.3f} | {max(times):.3f} | "
+                  f"{throughput:.2f} | {realtime:.2f}x |\n\n"
+              )
+              report.write("| Artifact | Bytes | SHA-256 |\n| --- | ---: | --- |\n")
+              report.write(f"| Input AV3A | {sample.stat().st_size} | `{input_sha256}` |\n")
+              report.write(f"| Output WAV | {wav_bytes} | `{wav_sha256}` |\n")
+              report.write(f"| PCM16 payload | {wav_bytes - 44} | `{pcm_sha256}` |\n")
+          print(f"platform={os.environ['PLATFORM_NAME']}")
+          print(f"runs_seconds={','.join(f'{value:.3f}' for value in times)}")
+          print(f"average_seconds={average:.3f}")
+          print(f"median_seconds={median:.3f}")
+          print(f"input_sha256={input_sha256}")
+          print(f"wav_sha256={wav_sha256}")
+          print(f"pcm_sha256={pcm_sha256}")
