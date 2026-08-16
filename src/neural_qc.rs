@@ -563,8 +563,8 @@ impl<'model> NeuralSpectrumDecoder<'model> {
         let ranges = noise_ranges(shape, noise_dimensions, noise_filling);
         let medians = self.base.quantizer().quantile_medians();
         let mut draws = 0;
-        for group in 0..noise_filling.group_count {
-            for dimension in ranges[group].0..ranges[group].1 {
+        for range in ranges[..noise_filling.group_count].iter() {
+            for dimension in range.0..range.1 {
                 for (channel, &median) in medians.iter().enumerate() {
                     let index = dimension + channel * shape.dimensions();
                     if self.base_dequantized[index] == median {

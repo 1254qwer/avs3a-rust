@@ -373,13 +373,12 @@ impl<'model> McCoreDecoder<'model> {
                     },
                 );
         });
-        for error in finish_errors.into_iter().flatten() {
+        if let Some(error) = finish_errors.into_iter().flatten().next() {
             return Err(error);
         }
 
-        for channel in 0..channels {
-            let core =
-                cores[channel].ok_or(McCoreDecodeError::MissingCoreSideInformation { channel })?;
+        for (channel, core) in cores[..channels].iter().copied().enumerate() {
+            let core = core.ok_or(McCoreDecodeError::MissingCoreSideInformation { channel })?;
             self.channel_dsp[channel].reorder.degroup(
                 core.grouping(),
                 core.transform_type(),

@@ -421,18 +421,7 @@ fn convolve_transpose_stride_two(layer: &CnnLayer, input: &[f32], output: &mut [
         let mut dimension = 0;
         while dimension < input_dimensions {
             if dimension > 0 && dimension + 8 <= interior_end {
-                convolve_transpose_stride_two_wide(
-                    input,
-                    output,
-                    kernel,
-                    input_dimensions,
-                    output_dimensions,
-                    input_channels,
-                    output_channels,
-                    kernel_size,
-                    output_channel,
-                    dimension,
-                );
+                convolve_transpose_stride_two_wide(layer, input, output, output_channel, dimension);
                 dimension += 8;
                 continue;
             }
@@ -493,17 +482,18 @@ fn convolve_transpose_stride_two(layer: &CnnLayer, input: &[f32], output: &mut [
 
 #[inline(always)]
 fn convolve_transpose_stride_two_wide(
+    layer: &CnnLayer,
     input: &[f32],
     output: &mut [f32],
-    kernel: &[f32],
-    input_dimensions: usize,
-    output_dimensions: usize,
-    input_channels: usize,
-    output_channels: usize,
-    kernel_size: usize,
     output_channel: usize,
     dimension: usize,
 ) {
+    let input_dimensions = layer.input_shape().dimensions();
+    let output_dimensions = layer.output_shape().dimensions();
+    let input_channels = layer.input_shape().channels();
+    let output_channels = layer.output_shape().channels();
+    let kernel_size = layer.kernel_size();
+    let kernel = layer.kernel_coefficients();
     let odd_kernel_size = kernel_size.div_ceil(2);
     let even_kernel_size = (kernel_size - 1) / 2;
 
