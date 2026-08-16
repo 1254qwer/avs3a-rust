@@ -54,3 +54,73 @@ jobs:
           components: clippy, rustfmt
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+  real-sample-performance:
+    name: Real sample timing (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - name: Linux arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    env:
+      RAYON_NUM_THREADS: 4
+      RUSTFLAGS: -C target-cpu=native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build release decoder
+        run: cargo build --release --locked --bin avs3a-decode --target ${{ matrix.target }}
+      - name: Decode real 7.1.4 sample three times
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="target/${{ matrix.target }}/release/avs3a-decode"
+          sample="tests/fixtures/test.av3a"
+          times=()
+          for run in 1 2 3; do
+            log="$RUNNER_TEMP/avs3a-log-$run.txt"
+            start_ns="$(date +%s%N)"
+            "$binary" "$sample" /dev/null >"$log"
+            end_ns="$(date +%s%N)"
+            grep -q '^frames: 8701$' "$log"
+            elapsed="$(awk -v start="$start_ns" -v end="$end_ns" \
+              'BEGIN { printf "%.3f", (end - start) / 1000000000 }')"
+            times+=("$elapsed")
+          done
+          median="$(printf '%s\n' "${times[@]}" | sort -n | sed -n '2p')"
+          throughput="$(awk -v seconds="$median" 'BEGIN { printf "%.2f", 8701 / seconds }')"
+          realtime="$(awk -v seconds="$median" 'BEGIN { printf "%.2f", (8701 * 1024 / 44100) / seconds }')"
+          validation_wav="$RUNNER_TEMP/avs3a-validation.wav"
+          validation_log="$RUNNER_TEMP/avs3a-validation.log"
+          "$binary" "$sample" "$validation_wav" >"$validation_log"
+          grep -q '^frames: 8701$' "$validation_log"
+          input_sha256="$(sha256sum "$sample" | awk '{ print $1 }')"
+          wav_sha256="$(sha256sum "$validation_wav" | awk '{ print $1 }')"
+          pcm_sha256="$(tail -c +45 "$validation_wav" | sha256sum | awk '{ print $1 }')"
+          wav_bytes="$(stat -c '%s' "$validation_wav")"
+          printf 'input_sha256=%s\nwav_sha256=%s\npcm_sha256=%s\nwav_bytes=%s\n' \
+            "$input_sha256" "$wav_sha256" "$pcm_sha256" "$wav_bytes"
+          {
+            echo "### Real AVS3 sample timing"
+            echo
+            echo "| Runner | Threads | Runs (s) | Median (s) | Frames/s | Realtime |"
+            echo "| --- | ---: | --- | ---: | ---: | ---: |"
+            printf '| %s | %s | %s, %s, %s | %s | %s | %sx |\n' \
+              '${{ matrix.name }}' "$RAYON_NUM_THREADS" \
+              "${times[0]}" "${times[1]}" "${times[2]}" \
+              "$median" "$throughput" "$realtime"
+            echo
+            echo "| Artifact | Bytes | SHA-256 |"
+            echo "| --- | ---: | --- |"
+            printf '| Input AV3A | %s | `%s` |\n' "$(stat -c '%s' "$sample")" "$input_sha256"
+            printf '| Output WAV | %s | `%s` |\n' "$wav_bytes" "$wav_sha256"
+            printf '| PCM16 payload | %s | `%s` |\n' "$((wav_bytes - 44))" "$pcm_sha256"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,5 +1,5 @@
 /target/
 *.wav
 *.av3a
+!tests/fixtures/test.av3a
 *.prof
-
