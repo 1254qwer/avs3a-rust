@@ -118,6 +118,14 @@ impl<B: DecoderBackend> Decoder<B> {
         self.frame_index
     }
 
+    /// Reset temporal decoder state while keeping the validated stream
+    /// configuration. The next frame is treated as frame zero.
+    pub fn reset(&mut self) -> Result<(), DecodeError> {
+        self.backend.configure(self.config)?;
+        self.frame_index = 0;
+        Ok(())
+    }
+
     pub fn backend(&self) -> &B {
         &self.backend
     }
@@ -280,6 +288,21 @@ mod tests {
             Err(DecodeError::CrcMismatch { .. })
         ));
         assert_eq!(decoder.frame_index(), 0);
+    }
+
+    #[test]
+    fn decoder_reset_reuses_configuration_and_restarts_frame_index() {
+        let encoded = frame();
+        let mut decoder = PendingDecoder::new(TestBackend::default())
+            .configure(encoded.header())
+            .unwrap();
+        let mut samples = vec![0_i16; 1_024];
+        decoder.decode_into(&encoded, &mut samples).unwrap();
+        assert_eq!(decoder.frame_index(), 1);
+        decoder.reset().unwrap();
+        assert_eq!(decoder.frame_index(), 0);
+        decoder.decode_into(&encoded, &mut samples).unwrap();
+        assert_eq!(decoder.frame_index(), 1);
     }
 
     #[test]

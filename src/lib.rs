@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 mod bitstream;
+mod builtin_decoder;
 mod builtin_model;
 mod bwe;
 mod cnn;
@@ -48,6 +49,7 @@ mod tns;
 mod wav;
 
 pub use bitstream::{BitReader, BitWriter};
+pub use builtin_decoder::BuiltinDecoder;
 pub use builtin_model::{
     BUILTIN_MODEL_FNV1A, BUILTIN_MODEL_LEN, builtin_model_bytes, builtin_neural_model,
 };

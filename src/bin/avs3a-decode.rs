@@ -6,9 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use avs3a::{
-    AVS3_FEATURE_DIMENSIONS, ChannelConfig, CodecProfile, Decoder, EncodedFrame, FrameHeader,
-    FrameStream, HoaDecoderBackend, McDecoderBackend, MixDecoderBackend, MonoDecoderBackend,
-    PendingDecoder, StereoDecoderBackend, StreamEvent, WavWriter, is_multichannel_config,
+    AVS3_FEATURE_DIMENSIONS, BuiltinDecoder, EncodedFrame, FrameStream, StreamEvent, WavWriter,
 };
 
 const READ_BUFFER_SIZE: usize = 64 * 1024;
@@ -100,75 +98,9 @@ fn print_usage(program: &std::ffi::OsStr) {
     );
 }
 
-#[derive(Debug)]
-enum ActiveDecoder {
-    Mono(Box<Decoder<MonoDecoderBackend>>),
-    Stereo(Box<Decoder<StereoDecoderBackend>>),
-    Mc(Box<Decoder<McDecoderBackend>>),
-    Mix(Box<Decoder<MixDecoderBackend>>),
-    Hoa(Box<Decoder<HoaDecoderBackend>>),
-}
-
-impl ActiveDecoder {
-    fn configure(header: &FrameHeader) -> Result<Self, Box<dyn std::error::Error>> {
-        match (header.profile, header.channel_config) {
-            (CodecProfile::ChannelBased, Some(ChannelConfig::Mono)) => Ok(Self::Mono(Box::new(
-                PendingDecoder::new(MonoDecoderBackend::new_builtin()?).configure(header)?,
-            ))),
-            (CodecProfile::ChannelBased, Some(ChannelConfig::Stereo)) => {
-                Ok(Self::Stereo(Box::new(
-                    PendingDecoder::new(StereoDecoderBackend::new_builtin()?).configure(header)?,
-                )))
-            }
-            (CodecProfile::ChannelBased, Some(config)) if is_multichannel_config(config) => {
-                Ok(Self::Mc(Box::new(
-                    PendingDecoder::new(McDecoderBackend::new_builtin()?).configure(header)?,
-                )))
-            }
-            (CodecProfile::Mixed, _) => Ok(Self::Mix(Box::new(
-                PendingDecoder::new(MixDecoderBackend::new_builtin()?).configure(header)?,
-            ))),
-            (
-                CodecProfile::Hoa,
-                Some(ChannelConfig::Hoa1 | ChannelConfig::Hoa2 | ChannelConfig::Hoa3),
-            ) => Ok(Self::Hoa(Box::new(
-                PendingDecoder::new(HoaDecoderBackend::new_builtin()?).configure(header)?,
-            ))),
-            (profile, config) => Err(format!(
-                "unsupported profile/channel configuration: {profile:?}/{config:?}"
-            )
-            .into()),
-        }
-    }
-
-    fn decode_into(
-        &mut self,
-        frame: &EncodedFrame,
-        output: &mut [i16],
-    ) -> Result<(), avs3a::DecodeError> {
-        match self {
-            Self::Mono(decoder) => decoder.decode_into(frame, output),
-            Self::Stereo(decoder) => decoder.decode_into(frame, output),
-            Self::Mc(decoder) => decoder.decode_into(frame, output),
-            Self::Mix(decoder) => decoder.decode_into(frame, output),
-            Self::Hoa(decoder) => decoder.decode_into(frame, output),
-        }
-    }
-
-    fn last_clipped_samples(&self) -> usize {
-        match self {
-            Self::Mono(decoder) => decoder.backend().last_clipped_samples(),
-            Self::Stereo(decoder) => decoder.backend().last_clipped_samples(),
-            Self::Mc(decoder) => decoder.backend().last_clipped_samples(),
-            Self::Mix(decoder) => decoder.backend().last_clipped_samples(),
-            Self::Hoa(decoder) => decoder.backend().last_clipped_samples(),
-        }
-    }
-}
-
 struct DecodeState<'path> {
     output_path: &'path Path,
-    decoder: Option<ActiveDecoder>,
+    decoder: Option<BuiltinDecoder>,
     wav: Option<WavWriter<File>>,
     samples: Vec<i16>,
     frames: u64,
@@ -219,7 +151,7 @@ impl<'path> DecodeState<'path> {
             let sample_count = usize::from(channels)
                 .checked_mul(AVS3_FEATURE_DIMENSIONS)
                 .ok_or("PCM frame sample count overflow")?;
-            self.decoder = Some(ActiveDecoder::configure(frame.header())?);
+            self.decoder = Some(BuiltinDecoder::configure(frame.header())?);
             self.wav = Some(WavWriter::create(
                 self.output_path,
                 channels,
