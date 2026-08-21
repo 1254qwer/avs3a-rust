@@ -112,9 +112,9 @@ impl<'path> DecodeState<'path> {
 
         let decoder = self.decoder.as_mut().expect("decoder initialized above");
         let audio = decoder.decode(frame)?;
-        self.clipped_samples = self.clipped_samples.saturating_add(
-            u64::try_from(decoder.backend().last_clipped_samples()).unwrap_or(u64::MAX),
-        );
+        self.clipped_samples = self
+            .clipped_samples
+            .saturating_add(u64::try_from(decoder.last_clipped_samples()).unwrap_or(u64::MAX));
         self.wav
             .as_mut()
             .expect("WAV writer initialized with decoder")

@@ -4,14 +4,13 @@ use crate::header::{ChannelConfig, CodecProfile, FrameHeader, SoundBedType};
 use crate::metadata::{MetadataPayloadParser, MetadataSummary};
 use crate::metadata_values::FrameMetadata;
 use crate::model::AVS3_FEATURE_DIMENSIONS;
-use crate::mono_backend::float_to_pcm16;
 use crate::stereo::{STEREO_CHANNELS, StereoCodingMode};
 use crate::stereo_core::{
     McrCoreDiagnostics, STEREO_FRAME_SAMPLES, StereoCoreDecodeError, StereoCoreDecoder,
     StereoCoreDiagnostics,
 };
 
-/// Public PCM16 backend for channel-based stereo AVS3 frames.
+/// Public backend for channel-based stereo AVS3 frames.
 ///
 /// Bitrates above 32 kbps use the ordinary MS/ILD path. The reference switches
 /// 24/32 kbps streams to MCR, which is decoded through the dedicated upmix path.
@@ -20,12 +19,9 @@ pub struct StereoDecoderBackend {
     core: StereoCoreDecoder<'static>,
     metadata: MetadataPayloadParser,
     configured: Option<DecoderConfig>,
-    floating_output: [f32; STEREO_FRAME_SAMPLES],
     last_diagnostics: Option<StereoCoreDiagnostics>,
     last_mcr_diagnostics: Option<McrCoreDiagnostics>,
     last_metadata: Option<MetadataSummary>,
-    last_clipped_samples: usize,
-    total_clipped_samples: u64,
 }
 
 impl StereoDecoderBackend {
@@ -34,12 +30,9 @@ impl StereoDecoderBackend {
             core: StereoCoreDecoder::new_builtin()?,
             metadata: MetadataPayloadParser::new(),
             configured: None,
-            floating_output: [0.0; STEREO_FRAME_SAMPLES],
             last_diagnostics: None,
             last_mcr_diagnostics: None,
             last_metadata: None,
-            last_clipped_samples: 0,
-            total_clipped_samples: 0,
         })
     }
 
@@ -66,14 +59,6 @@ impl StereoDecoderBackend {
     pub fn last_metadata_values(&self) -> Option<&FrameMetadata> {
         self.last_metadata?;
         self.metadata.last_metadata()
-    }
-
-    pub fn last_clipped_samples(&self) -> usize {
-        self.last_clipped_samples
-    }
-
-    pub fn total_clipped_samples(&self) -> u64 {
-        self.total_clipped_samples
     }
 }
 
@@ -117,8 +102,6 @@ impl DecoderBackend for StereoDecoderBackend {
         self.last_diagnostics = None;
         self.last_mcr_diagnostics = None;
         self.last_metadata = None;
-        self.last_clipped_samples = 0;
-        self.total_clipped_samples = 0;
         self.metadata.prepare_storage();
         self.configured = Some(config);
         Ok(())
@@ -128,7 +111,7 @@ impl DecoderBackend for StereoDecoderBackend {
         &mut self,
         header: &FrameHeader,
         payload: &[u8],
-        output: &mut [i16],
+        output: &mut [f32],
     ) -> Result<(), DecodeError> {
         if output.len() != STEREO_FRAME_SAMPLES {
             return Err(DecodeError::SampleCount {
@@ -154,30 +137,23 @@ impl DecoderBackend for StereoDecoderBackend {
         let mode = StereoCodingMode::for_bitrate(audio_header.bitrate);
         let (diagnostics, mcr_diagnostics) = match mode {
             StereoCodingMode::MidSide => (
-                Some(self.core.decode(
-                    parsed.audio_payload(),
-                    &audio_header,
-                    &mut self.floating_output,
-                )?),
+                Some(
+                    self.core
+                        .decode(parsed.audio_payload(), &audio_header, output)?,
+                ),
                 None,
             ),
             StereoCodingMode::Mcr => (
                 None,
-                Some(self.core.decode_mcr(
-                    parsed.audio_payload(),
-                    &audio_header,
-                    &mut self.floating_output,
-                )?),
+                Some(
+                    self.core
+                        .decode_mcr(parsed.audio_payload(), &audio_header, output)?,
+                ),
             ),
         };
-        let clipped = float_to_pcm16(&self.floating_output, output);
         self.last_diagnostics = diagnostics;
         self.last_mcr_diagnostics = mcr_diagnostics;
         self.last_metadata = Some(metadata);
-        self.last_clipped_samples = clipped;
-        self.total_clipped_samples = self
-            .total_clipped_samples
-            .saturating_add(u64::try_from(clipped).unwrap_or(u64::MAX));
         Ok(())
     }
 }

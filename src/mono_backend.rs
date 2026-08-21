@@ -9,19 +9,15 @@ use crate::mono::{MonoCoreDecodeError, MonoCoreDecoder, MonoCoreDiagnostics};
 
 /// Public decoder backend for channel-based mono AVS3 frames.
 ///
-/// The backend owns all entropy, DSP, random and overlap state. It converts
-/// the core's floating output with the C decoder's `floor(x + 0.5)` rule and
-/// saturates to PCM16 while reporting clipping counts.
+/// The backend owns all entropy, DSP, random and overlap state and emits the
+/// core's native floating output; [`crate::Decoder`] quantises it to PCM16.
 #[derive(Debug)]
 pub struct MonoDecoderBackend {
     core: MonoCoreDecoder<'static>,
     metadata: MetadataPayloadParser,
     configured: Option<DecoderConfig>,
-    floating_output: [f32; AVS3_FEATURE_DIMENSIONS],
     last_diagnostics: Option<MonoCoreDiagnostics>,
     last_metadata: Option<MetadataSummary>,
-    last_clipped_samples: usize,
-    total_clipped_samples: u64,
 }
 
 impl MonoDecoderBackend {
@@ -30,11 +26,8 @@ impl MonoDecoderBackend {
             core: MonoCoreDecoder::new_builtin()?,
             metadata: MetadataPayloadParser::new(),
             configured: None,
-            floating_output: [0.0; AVS3_FEATURE_DIMENSIONS],
             last_diagnostics: None,
             last_metadata: None,
-            last_clipped_samples: 0,
-            total_clipped_samples: 0,
         })
     }
 
@@ -57,14 +50,6 @@ impl MonoDecoderBackend {
     pub fn last_metadata_values(&self) -> Option<&FrameMetadata> {
         self.last_metadata?;
         self.metadata.last_metadata()
-    }
-
-    pub fn last_clipped_samples(&self) -> usize {
-        self.last_clipped_samples
-    }
-
-    pub fn total_clipped_samples(&self) -> u64 {
-        self.total_clipped_samples
     }
 }
 
@@ -104,8 +89,6 @@ impl DecoderBackend for MonoDecoderBackend {
         self.core.reset();
         self.last_diagnostics = None;
         self.last_metadata = None;
-        self.last_clipped_samples = 0;
-        self.total_clipped_samples = 0;
         self.metadata.prepare_storage();
         self.configured = Some(config);
         Ok(())
@@ -115,7 +98,7 @@ impl DecoderBackend for MonoDecoderBackend {
         &mut self,
         header: &FrameHeader,
         payload: &[u8],
-        output: &mut [i16],
+        output: &mut [f32],
     ) -> Result<(), DecodeError> {
         if output.len() != AVS3_FEATURE_DIMENSIONS {
             return Err(DecodeError::SampleCount {
@@ -140,16 +123,9 @@ impl DecoderBackend for MonoDecoderBackend {
         audio_header.frame_len = audio_header.header_len + audio_header.payload_len;
         let config =
             CoreBitstreamConfig::for_mono(&audio_header).map_err(MonoCoreDecodeError::from)?;
-        let diagnostics =
-            self.core
-                .decode(parsed.audio_payload(), config, &mut self.floating_output)?;
-        let clipped = float_to_pcm16(&self.floating_output, output);
+        let diagnostics = self.core.decode(parsed.audio_payload(), config, output)?;
         self.last_diagnostics = Some(diagnostics);
         self.last_metadata = Some(metadata);
-        self.last_clipped_samples = clipped;
-        self.total_clipped_samples = self
-            .total_clipped_samples
-            .saturating_add(u64::try_from(clipped).unwrap_or(u64::MAX));
         Ok(())
     }
 }

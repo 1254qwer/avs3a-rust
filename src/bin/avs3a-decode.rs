@@ -1,12 +1,13 @@
 use std::env;
 use std::ffi::OsString;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use avs3a::{
-    AVS3_FEATURE_DIMENSIONS, BuiltinDecoder, EncodedFrame, FrameStream, StreamEvent, WavWriter,
+    AVS3_FEATURE_DIMENSIONS, BuiltinDecoder, EncodedFrame, FrameStream, ISO_BMFF_SNIFF_BYTES,
+    Mp4FrameReader, StreamEvent, WavWriter, is_iso_bmff,
 };
 
 const READ_BUFFER_SIZE: usize = 64 * 1024;
@@ -40,10 +41,60 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let input = PathBuf::from(input);
     let output = PathBuf::from(output);
-    let mut reader = BufReader::new(File::open(&input)?);
+    let mut file = File::open(&input)?;
+    let mut state = DecodeState::new(&output, max_frames);
+    let container = if sniff_iso_bmff(&mut file)? {
+        decode_container(BufReader::new(file), &mut state)?
+    } else {
+        decode_elementary_stream(BufReader::new(file), &mut state)?
+    };
+    state.finish(&input, container)?;
+    Ok(())
+}
+
+/// What the input file turned out to be.
+enum Container {
+    ElementaryStream,
+    IsoBmff { samples: usize, seconds: f64 },
+}
+
+/// Peek at the file's first bytes and rewind.
+fn sniff_iso_bmff(file: &mut File) -> Result<bool, Box<dyn std::error::Error>> {
+    let mut prefix = [0_u8; ISO_BMFF_SNIFF_BYTES];
+    let detected = match file.read_exact(&mut prefix) {
+        Ok(()) => is_iso_bmff(&prefix),
+        // A file too short to hold a box header cannot be a container.
+        Err(error) if error.kind() == ErrorKind::UnexpectedEof => false,
+        Err(error) => return Err(error.into()),
+    };
+    file.seek(SeekFrom::Start(0))?;
+    Ok(detected)
+}
+
+fn decode_container<R: Read + Seek>(
+    reader: R,
+    state: &mut DecodeState<'_>,
+) -> Result<Container, Box<dyn std::error::Error>> {
+    let mut frames = Mp4FrameReader::open(reader)?;
+    let container = Container::IsoBmff {
+        samples: frames.track().samples().len(),
+        seconds: frames.track().duration_seconds(),
+    };
+    while let Some(frame) = frames.next_frame()? {
+        state.decode_frame(&frame)?;
+        if state.reached_limit() {
+            break;
+        }
+    }
+    Ok(container)
+}
+
+fn decode_elementary_stream<R: Read>(
+    mut reader: R,
+    state: &mut DecodeState<'_>,
+) -> Result<Container, Box<dyn std::error::Error>> {
     let mut parser = FrameStream::new();
     let mut buffer = [0_u8; READ_BUFFER_SIZE];
-    let mut state = DecodeState::new(&output, max_frames);
 
     'input: loop {
         let read = reader.read(&mut buffer)?;
@@ -62,8 +113,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             state.accept(event)?;
         }
     }
-    state.finish(&input)?;
-    Ok(())
+    Ok(Container::ElementaryStream)
 }
 
 fn parse_optional_frame_limit(
@@ -93,7 +143,7 @@ fn parse_optional_frame_limit(
 
 fn print_usage(program: &std::ffi::OsStr) {
     eprintln!(
-        "Usage: {} <input.av3a> <output.wav> [--frames <count>]\n\nDecodes channel-based, Mix or HOA AVS3 to PCM16 WAV.",
+        "Usage: {} <input.av3a|input.mp4|input.m4a> <output.wav> [--frames <count>]\n\nDecodes channel-based, Mix or HOA AVS3 to PCM16 WAV.\nAccepts a raw elementary stream or an MP4/M4A container; the format is detected.",
         PathBuf::from(program).display()
     );
 }
@@ -105,7 +155,6 @@ struct DecodeState<'path> {
     samples: Vec<i16>,
     frames: u64,
     max_frames: Option<u64>,
-    clipped_samples: u64,
     channels: u16,
     sample_rate: u32,
 }
@@ -119,7 +168,6 @@ impl<'path> DecodeState<'path> {
             samples: Vec::new(),
             frames: 0,
             max_frames,
-            clipped_samples: 0,
             channels: 0,
             sample_rate: 0,
         }
@@ -164,9 +212,6 @@ impl<'path> DecodeState<'path> {
 
         let decoder = self.decoder.as_mut().expect("decoder initialized above");
         decoder.decode_into(frame, &mut self.samples)?;
-        self.clipped_samples = self
-            .clipped_samples
-            .saturating_add(u64::try_from(decoder.last_clipped_samples()).unwrap_or(u64::MAX));
         self.wav
             .as_mut()
             .expect("WAV writer initialized with decoder")
@@ -175,19 +220,34 @@ impl<'path> DecodeState<'path> {
         Ok(())
     }
 
-    fn finish(mut self, input: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    fn finish(
+        mut self,
+        input: &Path,
+        container: Container,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let Some(wav) = self.wav.take() else {
             return Err("no complete supported AVS3 frame found".into());
         };
         wav.finalize()?;
         println!("input: {}", input.display());
+        match container {
+            Container::ElementaryStream => println!("container: raw elementary stream"),
+            Container::IsoBmff { samples, seconds } => {
+                println!("container: MP4 ({samples} samples, {seconds:.3} s)");
+            }
+        }
         println!("output: {}", self.output_path.display());
         println!(
             "format: {} channels at {} Hz",
             self.channels, self.sample_rate
         );
         println!("frames: {}", self.frames);
-        println!("clipped samples: {}", self.clipped_samples);
+        println!(
+            "clipped samples: {}",
+            self.decoder
+                .as_ref()
+                .map_or(0, BuiltinDecoder::total_clipped_samples)
+        );
         Ok(())
     }
 }

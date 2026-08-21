@@ -19,7 +19,7 @@ const HOA_SIN_QUARTER: usize = 256;
 const HOA_SIN_HALF: usize = 512;
 const HOA_SIN_THREE_QUARTERS: usize = 768;
 const HOA_SIN_FULL: usize = 1_024;
-const HOA_BASIS_DELAY_FRAMES: usize = 2;
+pub(crate) const HOA_BASIS_DELAY_FRAMES: usize = 2;
 const HOA_OUTPUT_CHANNELS: usize = MAX_CHANNELS as usize;
 const AVS3_PI: f32 = core::f32::consts::PI;
 

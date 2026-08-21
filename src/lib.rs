@@ -37,6 +37,7 @@ mod mix_backend;
 mod model;
 mod mono;
 mod mono_backend;
+mod mp4;
 mod neural_qc;
 mod random;
 mod range_coder;
@@ -49,7 +50,7 @@ mod tns;
 mod wav;
 
 pub use bitstream::{BitReader, BitWriter};
-pub use builtin_decoder::BuiltinDecoder;
+pub use builtin_decoder::{BuiltinDecoder, CHANNEL_WARMUP_FRAMES, HOA_WARMUP_FRAMES};
 pub use builtin_model::{
     BUILTIN_MODEL_FNV1A, BUILTIN_MODEL_LEN, builtin_model_bytes, builtin_neural_model,
 };
@@ -61,8 +62,10 @@ pub use core_side::{
     MAX_LSF_CODEBOOKS, MAX_TNS_FILTERS, MAX_TNS_ORDER, MonoFrameSideInfo, MonoSideInfoDecoder,
     ParsedNeuralQc, TnsCoefficient, TnsFilterSideInfo, TnsSideInfo, TransformType, WindowGrouping,
 };
-pub use decoder::{AudioFrame, Decoder, DecoderBackend, DecoderConfig, PendingDecoder};
-pub use error::{BitstreamError, DecodeError, HeaderError, StreamError, WavError};
+pub use decoder::{
+    AudioFrame, Decoder, DecoderBackend, DecoderConfig, FLOAT_FULL_SCALE, PendingDecoder,
+};
+pub use error::{BitstreamError, DecodeError, HeaderError, Mp4Error, StreamError, WavError};
 pub use fd_shaping::{
     FD_TABLE_BYTES_LEN, FD_TABLE_FNV1A, FD_TABLE_VALUES, FdShapingError, FdSpectrumShaping,
     fd_table_bytes,
@@ -135,6 +138,10 @@ pub use model::{
 };
 pub use mono::{MonoCoreDecodeError, MonoCoreDecoder, MonoCoreDiagnostics};
 pub use mono_backend::{MonoDecoderBackend, float_to_pcm16};
+pub use mp4::{
+    AV3A_SAMPLE_ENTRY, Av3aTrack, ISO_BMFF_SNIFF_BYTES, Mp4Edit, Mp4FrameReader, Mp4Sample,
+    is_iso_bmff,
+};
 pub use neural_qc::{
     AVS3_NOISE_GROUPS, AVS3_SHORT_BLOCKS, DecodedNeuralSpectrum, LowComplexityNeuralQc,
     MAX_MAIN_SCALE_INDEX, MAX_NOISE_FILLING_INDEX, MAX_QC_BITSTREAM_BYTES, MainNeuralQc,

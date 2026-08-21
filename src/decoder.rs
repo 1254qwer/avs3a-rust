@@ -1,5 +1,6 @@
 use crate::error::DecodeError;
 use crate::header::{BitDepth, ChannelConfig, CodecProfile, FrameHeader, NnType, SoundBedType};
+use crate::mono_backend::float_to_pcm16;
 use crate::stream::EncodedFrame;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +64,14 @@ impl AudioFrame {
     }
 }
 
+/// Full-scale magnitude of the decoder's float output.
+///
+/// Synthesis runs in PCM16 units rather than `-1.0..=1.0`, because the
+/// reference decoder's rounding and saturation rule is defined against integer
+/// full scale. Divide by this to reach the normalised range most audio APIs
+/// expect.
+pub const FLOAT_FULL_SCALE: f32 = 32_768.0;
+
 /// Boundary between checked framing/state management and the DSP port.
 ///
 /// Implementations receive an output slice with exactly
@@ -70,6 +79,11 @@ impl AudioFrame {
 /// which prevents a backend from silently violating the public frame shape.
 /// The payload still contains the frame-level metadata prefix; built-in
 /// backends parse it before passing the remaining audio bits to their cores.
+///
+/// Output is floats in PCM16 units (see [`FLOAT_FULL_SCALE`]) because that is
+/// what every synthesis pipeline natively produces. Quantisation belongs to
+/// [`Decoder`], so a renderer that wants to downmix or apply gain never has to
+/// undo a rounding step the decoder had no reason to take.
 pub trait DecoderBackend {
     fn configure(&mut self, config: DecoderConfig) -> Result<(), DecodeError>;
 
@@ -77,7 +91,7 @@ pub trait DecoderBackend {
         &mut self,
         header: &FrameHeader,
         payload: &[u8],
-        output: &mut [i16],
+        output: &mut [f32],
     ) -> Result<(), DecodeError>;
 }
 
@@ -98,6 +112,9 @@ impl<B: DecoderBackend> PendingDecoder<B> {
             backend: self.backend,
             config,
             frame_index: 0,
+            float_scratch: Vec::new(),
+            last_clipped_samples: 0,
+            total_clipped_samples: 0,
         })
     }
 }
@@ -107,6 +124,11 @@ pub struct Decoder<B> {
     backend: B,
     config: DecoderConfig,
     frame_index: u64,
+    /// Float staging for the PCM16 path, allocated on first use so callers
+    /// that consume floats never pay for it.
+    float_scratch: Vec<f32>,
+    last_clipped_samples: usize,
+    total_clipped_samples: u64,
 }
 
 impl<B: DecoderBackend> Decoder<B> {
@@ -118,11 +140,40 @@ impl<B: DecoderBackend> Decoder<B> {
         self.frame_index
     }
 
+    /// Interleaved sample count of one decoded frame.
+    pub fn sample_count(&self) -> Result<usize, DecodeError> {
+        usize::from(self.config.channels)
+            .checked_mul(
+                usize::try_from(self.config.samples_per_channel).map_err(|_| {
+                    DecodeError::SampleCount {
+                        expected: 0,
+                        actual: 0,
+                    }
+                })?,
+            )
+            .ok_or(DecodeError::SampleCount {
+                expected: usize::MAX,
+                actual: 0,
+            })
+    }
+
+    /// Samples clamped to full scale by the most recent PCM16 conversion.
+    pub fn last_clipped_samples(&self) -> usize {
+        self.last_clipped_samples
+    }
+
+    /// Samples clamped to full scale since the decoder was configured or reset.
+    pub fn total_clipped_samples(&self) -> u64 {
+        self.total_clipped_samples
+    }
+
     /// Reset temporal decoder state while keeping the validated stream
     /// configuration. The next frame is treated as frame zero.
     pub fn reset(&mut self) -> Result<(), DecodeError> {
         self.backend.configure(self.config)?;
         self.frame_index = 0;
+        self.last_clipped_samples = 0;
+        self.total_clipped_samples = 0;
         Ok(())
     }
 
@@ -147,16 +198,53 @@ impl<B: DecoderBackend> Decoder<B> {
         })
     }
 
-    /// Decode into caller-owned interleaved PCM storage.
+    /// Decode into caller-owned interleaved PCM16 storage.
     ///
-    /// This is the allocation-free streaming path. The output length must be
-    /// exactly `channels * samples_per_channel`, and decoder state advances
-    /// only after CRC, configuration and backend decoding all succeed.
+    /// The output length must be exactly `channels * samples_per_channel`, and
+    /// decoder state advances only after CRC, configuration and backend
+    /// decoding all succeed.
     pub fn decode_into(
         &mut self,
         frame: &EncodedFrame,
         samples: &mut [i16],
     ) -> Result<(), DecodeError> {
+        let sample_count = self.prepare(frame, samples.len())?;
+        if self.float_scratch.len() != sample_count {
+            self.float_scratch.clear();
+            self.float_scratch.resize(sample_count, 0.0);
+        }
+        self.backend
+            .decode_frame(frame.header(), frame.payload(), &mut self.float_scratch)?;
+        let clipped = float_to_pcm16(&self.float_scratch, samples);
+        self.last_clipped_samples = clipped;
+        self.total_clipped_samples = self
+            .total_clipped_samples
+            .saturating_add(u64::try_from(clipped).unwrap_or(u64::MAX));
+        self.frame_index = self.frame_index.saturating_add(1);
+        Ok(())
+    }
+
+    /// Decode into caller-owned interleaved float storage.
+    ///
+    /// This is the backend's native output, so nothing is copied and nothing is
+    /// quantised. Samples are in PCM16 units, not `-1.0..=1.0`: divide by
+    /// [`FLOAT_FULL_SCALE`] for the normalised range most audio APIs expect.
+    /// Values may exceed full scale, because the bitstream can encode an
+    /// overshoot that only clips once [`Self::decode_into`] quantises it.
+    pub fn decode_into_f32(
+        &mut self,
+        frame: &EncodedFrame,
+        samples: &mut [f32],
+    ) -> Result<(), DecodeError> {
+        self.prepare(frame, samples.len())?;
+        self.backend
+            .decode_frame(frame.header(), frame.payload(), samples)?;
+        self.frame_index = self.frame_index.saturating_add(1);
+        Ok(())
+    }
+
+    /// Validate a frame against the decoder configuration before decoding it.
+    fn prepare(&self, frame: &EncodedFrame, output_len: usize) -> Result<usize, DecodeError> {
         if !frame.crc_is_valid() {
             return Err(DecodeError::CrcMismatch {
                 expected: frame.expected_crc(),
@@ -168,32 +256,13 @@ impl<B: DecoderBackend> Decoder<B> {
             return Err(DecodeError::ConfigurationChanged);
         }
         let sample_count = self.sample_count()?;
-        if samples.len() != sample_count {
+        if output_len != sample_count {
             return Err(DecodeError::SampleCount {
                 expected: sample_count,
-                actual: samples.len(),
+                actual: output_len,
             });
         }
-        self.backend
-            .decode_frame(frame.header(), frame.payload(), samples)?;
-        self.frame_index = self.frame_index.saturating_add(1);
-        Ok(())
-    }
-
-    fn sample_count(&self) -> Result<usize, DecodeError> {
-        usize::from(self.config.channels)
-            .checked_mul(
-                usize::try_from(self.config.samples_per_channel).map_err(|_| {
-                    DecodeError::SampleCount {
-                        expected: 0,
-                        actual: 0,
-                    }
-                })?,
-            )
-            .ok_or(DecodeError::SampleCount {
-                expected: usize::MAX,
-                actual: 0,
-            })
+        Ok(sample_count)
     }
 }
 
@@ -217,10 +286,9 @@ mod tests {
             &mut self,
             _header: &FrameHeader,
             payload: &[u8],
-            output: &mut [i16],
+            output: &mut [f32],
         ) -> Result<(), DecodeError> {
-            let value = i16::from(payload[0]);
-            output.fill(value);
+            output.fill(f32::from(payload[0]));
             Ok(())
         }
     }
@@ -343,5 +411,65 @@ mod tests {
         ));
         assert_eq!(wrong, [9; 17]);
         assert_eq!(decoder.frame_index(), 1);
+    }
+
+    #[test]
+    fn decode_into_f32_matches_the_pcm16_path_without_quantising() {
+        let encoded = frame();
+        let mut decoder = PendingDecoder::new(TestBackend::default())
+            .configure(encoded.header())
+            .unwrap();
+        let mut floats = vec![0.0_f32; decoder.sample_count().unwrap()];
+        decoder.decode_into_f32(&encoded, &mut floats).unwrap();
+        assert!(floats.iter().all(|&sample| sample == 7.0));
+        assert_eq!(decoder.frame_index(), 1);
+        // Only the PCM16 path quantises, so it alone tracks clipping.
+        assert_eq!(decoder.total_clipped_samples(), 0);
+
+        let mut wrong = [0.0_f32; 17];
+        assert!(matches!(
+            decoder.decode_into_f32(&encoded, &mut wrong),
+            Err(DecodeError::SampleCount {
+                expected: 1_024,
+                actual: 17
+            })
+        ));
+        assert_eq!(decoder.frame_index(), 1);
+    }
+
+    #[test]
+    fn pcm16_path_counts_clipping_and_reset_clears_it() {
+        let encoded = frame();
+
+        /// Emits twice full scale, so every sample saturates.
+        #[derive(Debug, Default)]
+        struct LoudBackend;
+        impl DecoderBackend for LoudBackend {
+            fn configure(&mut self, _config: DecoderConfig) -> Result<(), DecodeError> {
+                Ok(())
+            }
+            fn decode_frame(
+                &mut self,
+                _header: &FrameHeader,
+                _payload: &[u8],
+                output: &mut [f32],
+            ) -> Result<(), DecodeError> {
+                output.fill(FLOAT_FULL_SCALE * 2.0);
+                Ok(())
+            }
+        }
+
+        let mut decoder = PendingDecoder::new(LoudBackend)
+            .configure(encoded.header())
+            .unwrap();
+        let mut samples = vec![0_i16; 1_024];
+        decoder.decode_into(&encoded, &mut samples).unwrap();
+        assert!(samples.iter().all(|&sample| sample == i16::MAX));
+        assert_eq!(decoder.last_clipped_samples(), 1_024);
+        assert_eq!(decoder.total_clipped_samples(), 1_024);
+        decoder.decode_into(&encoded, &mut samples).unwrap();
+        assert_eq!(decoder.total_clipped_samples(), 2_048);
+        decoder.reset().unwrap();
+        assert_eq!(decoder.total_clipped_samples(), 0);
     }
 }

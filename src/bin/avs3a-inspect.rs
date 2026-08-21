@@ -1,12 +1,13 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, BufReader, Read};
+use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use avs3a::{
-    CodecProfile, DecoderConfig, EncodedFrame, FrameHeader, FrameStream, McSideInfoDecoder,
-    MetadataPayloadParser, SoundBedType, StreamEvent,
+    CodecProfile, DecoderConfig, EncodedFrame, FrameHeader, FrameStream, ISO_BMFF_SNIFF_BYTES,
+    McSideInfoDecoder, MetadataPayloadParser, Mp4FrameReader, SoundBedType, StreamEvent,
+    is_iso_bmff,
 };
 
 const READ_BUFFER_SIZE: usize = 64 * 1024;
@@ -45,23 +46,34 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Err("missing input file".into());
     };
 
-    let file = File::open(&input)?;
-    let mut reader = BufReader::new(file);
-    let mut parser = FrameStream::new();
-    let mut buffer = [0_u8; READ_BUFFER_SIZE];
+    let mut file = File::open(&input)?;
     let mut summary = Summary::default();
-
-    loop {
-        let read = reader.read(&mut buffer)?;
-        if read == 0 {
-            break;
+    if sniff_iso_bmff(&mut file)? {
+        let mut frames = Mp4FrameReader::open(BufReader::new(file))?;
+        summary.container = Some(ContainerSummary {
+            samples: frames.track().samples().len(),
+            seconds: frames.track().duration_seconds(),
+            identity_edits: frames.track().edits().iter().all(|edit| edit.is_identity()),
+        });
+        while let Some(frame) = frames.next_frame()? {
+            summary.accept(StreamEvent::Frame(frame), verify_crc)?;
         }
-        for event in parser.push(&buffer[..read])? {
+    } else {
+        let mut reader = BufReader::new(file);
+        let mut parser = FrameStream::new();
+        let mut buffer = [0_u8; READ_BUFFER_SIZE];
+        loop {
+            let read = reader.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            for event in parser.push(&buffer[..read])? {
+                summary.accept(event, verify_crc)?;
+            }
+        }
+        for event in parser.finish()? {
             summary.accept(event, verify_crc)?;
         }
-    }
-    for event in parser.finish()? {
-        summary.accept(event, verify_crc)?;
     }
     summary.print(&input)?;
     if mc_side_info {
@@ -72,13 +84,35 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn print_usage(program: &std::ffi::OsStr) {
     eprintln!(
-        "Usage: {} [--verify-crc] [--mc-side-info] <input.av3a>\n\nParses an AV3A elementary stream without invoking a synthesis backend.",
+        "Usage: {} [--verify-crc] [--mc-side-info] <input.av3a|input.mp4|input.m4a>\n\nParses AV3A framing without invoking a synthesis backend.\nAccepts a raw elementary stream or an MP4/M4A container; the format is detected.",
         PathBuf::from(program).display()
     );
 }
 
+/// Peek at the file's first bytes and rewind.
+fn sniff_iso_bmff(file: &mut File) -> Result<bool, Box<dyn std::error::Error>> {
+    let mut prefix = [0_u8; ISO_BMFF_SNIFF_BYTES];
+    let detected = match file.read_exact(&mut prefix) {
+        Ok(()) => is_iso_bmff(&prefix),
+        // A file too short to hold a box header cannot be a container.
+        Err(error) if error.kind() == ErrorKind::UnexpectedEof => false,
+        Err(error) => return Err(error.into()),
+    };
+    file.seek(SeekFrom::Start(0))?;
+    Ok(detected)
+}
+
+/// What the container layer reported, when the input was one.
+#[derive(Debug)]
+struct ContainerSummary {
+    samples: usize,
+    seconds: f64,
+    identity_edits: bool,
+}
+
 #[derive(Debug, Default)]
 struct Summary {
+    container: Option<ContainerSummary>,
     first: Option<EncodedFrame>,
     last_config: Option<DecoderConfig>,
     frames: u64,
@@ -137,6 +171,21 @@ impl Summary {
         };
         let header = first.header();
         println!("file: {}", input.display());
+        match &self.container {
+            None => println!("container: raw elementary stream"),
+            Some(container) => {
+                println!(
+                    "container: MP4 ({} samples, {:.3} s{})",
+                    container.samples,
+                    container.seconds,
+                    if container.identity_edits {
+                        ""
+                    } else {
+                        ", non-identity edit list"
+                    }
+                );
+            }
+        }
         println!("profile: {:?}", header.profile);
         println!(
             "channel layout: {}",

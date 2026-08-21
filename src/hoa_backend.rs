@@ -1,13 +1,10 @@
 use crate::decoder::{DecoderBackend, DecoderConfig};
 use crate::error::DecodeError;
 use crate::header::{ChannelConfig, CodecProfile, FrameHeader, MAX_CHANNELS};
-use crate::hoa_core::{
-    HOA_MAX_FRAME_SAMPLES, HoaCoreDecodeError, HoaCoreDecoder, HoaCoreDiagnostics,
-};
+use crate::hoa_core::{HoaCoreDecodeError, HoaCoreDecoder, HoaCoreDiagnostics};
 use crate::metadata::{MetadataPayloadParser, MetadataSummary};
 use crate::metadata_values::FrameMetadata;
 use crate::model::AVS3_FEATURE_DIMENSIONS;
-use crate::mono_backend::float_to_pcm16;
 
 /// Public PCM16 backend for first-, second- and third-order HOA frames.
 ///
@@ -19,11 +16,8 @@ pub struct HoaDecoderBackend {
     core: HoaCoreDecoder<'static>,
     metadata: MetadataPayloadParser,
     configured: Option<DecoderConfig>,
-    floating_output: Vec<f32>,
     last_diagnostics: Option<HoaCoreDiagnostics>,
     last_metadata: Option<MetadataSummary>,
-    last_clipped_samples: usize,
-    total_clipped_samples: u64,
 }
 
 impl HoaDecoderBackend {
@@ -32,11 +26,8 @@ impl HoaDecoderBackend {
             core: HoaCoreDecoder::new_builtin()?,
             metadata: MetadataPayloadParser::new(),
             configured: None,
-            floating_output: vec![0.0; HOA_MAX_FRAME_SAMPLES],
             last_diagnostics: None,
             last_metadata: None,
-            last_clipped_samples: 0,
-            total_clipped_samples: 0,
         })
     }
 
@@ -59,14 +50,6 @@ impl HoaDecoderBackend {
     pub fn last_metadata_values(&self) -> Option<&FrameMetadata> {
         self.last_metadata?;
         self.metadata.last_metadata()
-    }
-
-    pub fn last_clipped_samples(&self) -> usize {
-        self.last_clipped_samples
-    }
-
-    pub fn total_clipped_samples(&self) -> u64 {
-        self.total_clipped_samples
     }
 }
 
@@ -110,8 +93,6 @@ impl DecoderBackend for HoaDecoderBackend {
         self.core.reset();
         self.last_diagnostics = None;
         self.last_metadata = None;
-        self.last_clipped_samples = 0;
-        self.total_clipped_samples = 0;
         self.metadata.prepare_storage();
         self.configured = Some(config);
         Ok(())
@@ -121,7 +102,7 @@ impl DecoderBackend for HoaDecoderBackend {
         &mut self,
         header: &FrameHeader,
         payload: &[u8],
-        output: &mut [i16],
+        output: &mut [f32],
     ) -> Result<(), DecodeError> {
         let Some(configured) = self.configured else {
             return Err(DecodeError::UnsupportedBackend);
@@ -146,18 +127,11 @@ impl DecoderBackend for HoaDecoderBackend {
         audio_header.payload_bits = parsed.audio_bits();
         audio_header.payload_len = parsed.audio_payload().len();
         audio_header.frame_len = audio_header.header_len + audio_header.payload_len;
-        let diagnostics = self.core.decode(
-            parsed.audio_payload(),
-            &audio_header,
-            &mut self.floating_output[..sample_count],
-        )?;
-        let clipped = float_to_pcm16(&self.floating_output[..sample_count], output);
+        let diagnostics = self
+            .core
+            .decode(parsed.audio_payload(), &audio_header, output)?;
         self.last_diagnostics = Some(diagnostics);
         self.last_metadata = Some(metadata);
-        self.last_clipped_samples = clipped;
-        self.total_clipped_samples = self
-            .total_clipped_samples
-            .saturating_add(u64::try_from(clipped).unwrap_or(u64::MAX));
         Ok(())
     }
 }

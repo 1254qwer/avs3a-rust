@@ -259,6 +259,149 @@ impl From<StereoCoreDecodeError> for DecodeError {
 }
 
 #[derive(Debug)]
+pub enum Mp4Error {
+    Io(std::io::Error),
+    NeedMoreData {
+        needed: u64,
+        available: u64,
+    },
+    Truncated {
+        context: &'static str,
+        needed: u64,
+        available: u64,
+    },
+    InvalidBoxSize {
+        kind: [u8; 4],
+        size: u64,
+    },
+    BoxTooLarge {
+        kind: [u8; 4],
+        size: u64,
+        limit: u64,
+    },
+    MissingBox {
+        kind: [u8; 4],
+    },
+    UnsupportedVersion {
+        kind: [u8; 4],
+        version: u8,
+    },
+    NoAv3aTrack,
+    InvalidSampleTable(&'static str),
+    InconsistentIndex {
+        declared: usize,
+        indexed: usize,
+    },
+    TooManySamples {
+        count: usize,
+        limit: usize,
+    },
+    SampleTooLarge {
+        index: usize,
+        size: usize,
+        limit: usize,
+    },
+    SampleOutOfRange {
+        index: usize,
+        count: usize,
+    },
+    FrameExceedsSample {
+        index: usize,
+        frame_len: usize,
+        sample_size: usize,
+    },
+    ArithmeticOverflow,
+    Header(HeaderError),
+}
+
+impl fmt::Display for Mp4Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(error) => error.fmt(f),
+            Self::NeedMoreData { needed, available } => write!(
+                f,
+                "need the first {needed} bytes of the file to read its metadata, {available} available"
+            ),
+            Self::Truncated {
+                context,
+                needed,
+                available,
+            } => write!(
+                f,
+                "`{context}` box ends early: need {needed} bytes, {available} available"
+            ),
+            Self::InvalidBoxSize { kind, size } => write!(
+                f,
+                "`{}` box declares an invalid size of {size} bytes",
+                kind.escape_ascii()
+            ),
+            Self::BoxTooLarge { kind, size, limit } => write!(
+                f,
+                "`{}` box is {size} bytes; maximum supported size is {limit}",
+                kind.escape_ascii()
+            ),
+            Self::MissingBox { kind } => {
+                write!(f, "required `{}` box is missing", kind.escape_ascii())
+            }
+            Self::UnsupportedVersion { kind, version } => write!(
+                f,
+                "unsupported `{}` box version {version}",
+                kind.escape_ascii()
+            ),
+            Self::NoAv3aTrack => f.write_str("the file has no AV3A track"),
+            Self::InvalidSampleTable(reason) => write!(f, "invalid sample table: {reason}"),
+            Self::InconsistentIndex { declared, indexed } => write!(
+                f,
+                "sample table places {indexed} of the {declared} declared samples"
+            ),
+            Self::TooManySamples { count, limit } => write!(
+                f,
+                "track has {count} samples; maximum supported count is {limit}"
+            ),
+            Self::SampleTooLarge { index, size, limit } => write!(
+                f,
+                "sample {index} is {size} bytes; maximum supported size is {limit}"
+            ),
+            Self::SampleOutOfRange { index, count } => {
+                write!(f, "sample {index} is out of range for {count} samples")
+            }
+            Self::FrameExceedsSample {
+                index,
+                frame_len,
+                sample_size,
+            } => write!(
+                f,
+                "sample {index} holds {sample_size} bytes but its header declares a {frame_len}-byte frame"
+            ),
+            Self::ArithmeticOverflow => f.write_str("container offset arithmetic overflow"),
+            Self::Header(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Mp4Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(error) => Some(error),
+            Self::Header(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for Mp4Error {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
+}
+
+impl From<HeaderError> for Mp4Error {
+    fn from(value: HeaderError) -> Self {
+        Self::Header(value)
+    }
+}
+
+#[derive(Debug)]
 pub enum WavError {
     Io(std::io::Error),
     InvalidChannels(u16),

@@ -87,24 +87,6 @@ impl MixDecoderBackend {
             MixBackendState::Multichannel(backend) => backend.last_metadata_values(),
         }
     }
-
-    pub fn last_clipped_samples(&self) -> usize {
-        match &self.state {
-            MixBackendState::Unconfigured => 0,
-            MixBackendState::Mono(backend) => backend.last_clipped_samples(),
-            MixBackendState::Stereo(backend) => backend.last_clipped_samples(),
-            MixBackendState::Multichannel(backend) => backend.last_clipped_samples(),
-        }
-    }
-
-    pub fn total_clipped_samples(&self) -> u64 {
-        match &self.state {
-            MixBackendState::Unconfigured => 0,
-            MixBackendState::Mono(backend) => backend.total_clipped_samples(),
-            MixBackendState::Stereo(backend) => backend.total_clipped_samples(),
-            MixBackendState::Multichannel(backend) => backend.total_clipped_samples(),
-        }
-    }
 }
 
 impl DecoderBackend for MixDecoderBackend {
@@ -138,7 +120,7 @@ impl DecoderBackend for MixDecoderBackend {
         &mut self,
         header: &FrameHeader,
         payload: &[u8],
-        output: &mut [i16],
+        output: &mut [f32],
     ) -> Result<(), DecodeError> {
         match &mut self.state {
             MixBackendState::Unconfigured => Err(DecodeError::UnsupportedBackend),

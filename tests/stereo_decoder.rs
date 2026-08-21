@@ -231,7 +231,7 @@ fn public_framing_crc_and_ordinary_stereo_backend_match_c_pcm16() {
     let audio = decoder.decode(&encoded).unwrap();
     assert_eq!(audio.samples().len(), 2_048);
     assert_eq!(decoder.frame_index(), 1);
-    assert_eq!(decoder.backend().last_clipped_samples(), 0);
+    assert_eq!(decoder.last_clipped_samples(), 0);
     assert_eq!(pcm_fingerprint(audio.samples()), 0xa036_2bb2_f0ab_465a);
     let metadata = decoder.backend().last_metadata().unwrap();
     assert_eq!(metadata.consumed_bits(), 2);
@@ -259,7 +259,7 @@ fn public_framing_crc_and_mcr_stereo_backend_decode_payload() {
     let audio = decoder.decode(&encoded).unwrap();
     assert_eq!(audio.samples().len(), 2_048);
     assert_eq!(decoder.frame_index(), 1);
-    assert_eq!(decoder.backend().last_clipped_samples(), 0);
+    assert_eq!(decoder.last_clipped_samples(), 0);
     assert!(decoder.backend().last_diagnostics().is_none());
     let metadata = decoder.backend().last_metadata().unwrap();
     assert_eq!(metadata.consumed_bits(), 2);

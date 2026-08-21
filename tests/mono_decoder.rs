@@ -159,7 +159,7 @@ fn public_framing_crc_and_mono_decoder_match_the_c_pipeline_vector() {
         [0, 0, 50, -194, -8_089, 3_802, i16::MAX, i16::MIN, i16::MIN]
     );
 
-    let clipped_before = decoder.backend().total_clipped_samples();
+    let clipped_before = decoder.total_clipped_samples();
     let mut damaged_bytes = framed_main_reference();
     *damaged_bytes.last_mut().unwrap() ^= 1;
     let damaged = parse_one_frame(&damaged_bytes);
@@ -169,5 +169,5 @@ fn public_framing_crc_and_mono_decoder_match_the_c_pipeline_vector() {
         Err(DecodeError::CrcMismatch { .. })
     ));
     assert_eq!(decoder.frame_index(), 1);
-    assert_eq!(decoder.backend().total_clipped_samples(), clipped_before);
+    assert_eq!(decoder.total_clipped_samples(), clipped_before);
 }
