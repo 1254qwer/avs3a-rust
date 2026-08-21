@@ -1376,7 +1376,7 @@ const TNS_CODES: [[TnsCode; 16]; 8] = [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BitWriter;
+    use crate::bitstream::BitWriter;
 
     const MAIN_REFERENCE_PAYLOAD_BITS: usize = 277;
     const MAIN_REFERENCE_PAYLOAD: [u8; 35] = [

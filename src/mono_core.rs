@@ -211,11 +211,11 @@ impl<'model> MonoCoreDecoder<'model> {
         let mut frame_random = self.random.clone();
 
         let decoded = match parsed.neural_qc() {
-            ParsedNeuralQc::Main(input) if config.nn_type() == crate::NnType::Main => {
+            ParsedNeuralQc::Main(input) if config.nn_type() == crate::header::NnType::Main => {
                 self.neural.decode_main(input, &mut frame_random)?
             }
             ParsedNeuralQc::LowComplexity(input)
-                if config.nn_type() == crate::NnType::LowComplexity =>
+                if config.nn_type() == crate::header::NnType::LowComplexity =>
             {
                 self.neural
                     .decode_low_complexity(input, &mut frame_random)?
@@ -256,7 +256,7 @@ impl<'model> MonoCoreDecoder<'model> {
 
 impl MonoCoreDecoder<'static> {
     pub fn new_builtin() -> Result<Self, MonoCoreDecodeError> {
-        let model = crate::builtin_neural_model().map_err(NeuralQcError::from)?;
+        let model = crate::builtin_model::builtin_neural_model().map_err(NeuralQcError::from)?;
         Self::new(model)
     }
 }
@@ -274,7 +274,9 @@ impl fmt::Debug for MonoCoreDecoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BitWriter, BweConfig, LsfCodebookMode, NnType, TransformType};
+    use crate::bitstream::BitWriter;
+    use crate::core_side::{BweConfig, LsfCodebookMode, TransformType};
+    use crate::header::NnType;
 
     fn reference_payload() -> (Vec<u8>, usize) {
         let mut writer = BitWriter::new();

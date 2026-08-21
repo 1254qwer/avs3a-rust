@@ -339,12 +339,13 @@ fn compare<L: Read + Seek, R: Read + Seek>(
             .expect("comparison chunk always fits usize");
         left.reader.read_exact(&mut left_bytes[..take])?;
         right.reader.read_exact(&mut right_bytes[..take])?;
-        for (left_sample, right_sample) in left_bytes[..take]
-            .chunks_exact(2)
-            .zip(right_bytes[..take].chunks_exact(2))
-        {
-            let left_sample = i16::from_le_bytes(left_sample.try_into().unwrap());
-            let right_sample = i16::from_le_bytes(right_sample.try_into().unwrap());
+        // Fixed-size chunks let the samples be decoded without a fallible
+        // slice-to-array conversion at every step.
+        let (left_pairs, _) = left_bytes[..take].as_chunks::<2>();
+        let (right_pairs, _) = right_bytes[..take].as_chunks::<2>();
+        for (left_sample, right_sample) in left_pairs.iter().zip(right_pairs) {
+            let left_sample = i16::from_le_bytes(*left_sample);
+            let right_sample = i16::from_le_bytes(*right_sample);
             total.observe(sample_index, left_sample, right_sample);
             let channel = usize::try_from(sample_index % u64::from(left.format.channels))
                 .expect("channel index fits usize");

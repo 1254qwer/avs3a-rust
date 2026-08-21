@@ -1115,7 +1115,8 @@ impl Default for McSideInfoDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AudioCodecId, BitDepth, BitWriter, NnType};
+    use crate::bitstream::BitWriter;
+    use crate::header::{AudioCodecId, BitDepth, NnType};
 
     fn header(payload_bits: usize) -> FrameHeader {
         FrameHeader {

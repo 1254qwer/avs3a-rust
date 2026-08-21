@@ -1,7 +1,9 @@
 use core::fmt;
 
 use crate::bitstream::BitReader;
-use crate::error::{BitstreamError, HeaderError};
+pub use crate::error::HeaderError;
+
+use crate::error::BitstreamError;
 
 pub const MAX_HEADER_BYTES: usize = 9;
 pub const MAX_PAYLOAD_BYTES: usize = 12_300;
@@ -232,7 +234,7 @@ pub struct HeaderInfo {
     pub header: FrameHeader,
 }
 
-pub(crate) fn parse_header(input: &[u8]) -> Result<HeaderInfo, HeaderError> {
+pub fn parse_header(input: &[u8]) -> Result<HeaderInfo, HeaderError> {
     if input.len() < 2 {
         return Err(HeaderError::NeedMoreData {
             needed: 2,
@@ -618,7 +620,7 @@ fn object_count(encoded: u8) -> Result<u8, HeaderError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BitWriter;
+    use crate::bitstream::BitWriter;
 
     fn base_header(profile: u64) -> BitWriter {
         let mut writer = BitWriter::new();

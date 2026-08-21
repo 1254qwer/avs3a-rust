@@ -539,7 +539,9 @@ pub fn inverse_mid_side(left: &mut [f32], right: &mut [f32], ild: u8) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AudioCodecId, BitDepth, BitWriter, BweWhiteningLevel, NnType, TransformType};
+    use crate::bitstream::BitWriter;
+    use crate::core_side::{BweWhiteningLevel, TransformType};
+    use crate::header::{AudioCodecId, BitDepth, NnType};
 
     const FRAME_LEN: usize = 1_024;
 

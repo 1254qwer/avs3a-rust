@@ -10,7 +10,7 @@ use crate::model::{AVS3_FEATURE_DIMENSIONS, NeuralModel};
 use crate::neural_qc::{NeuralQcError, NeuralSpectrumDecoder, NeuralSpectrumDiagnostics};
 use crate::random::Avs3Random;
 use crate::spectrum::{SpectrumReorder, SpectrumReorderError};
-use crate::stereo::{
+use crate::stereo_side::{
     STEREO_CHANNELS, StereoError, StereoSideInfo, StereoSideInfoDecoder, inverse_mid_side,
 };
 use crate::tns::{TnsSynthesis, TnsSynthesisError};
@@ -427,7 +427,7 @@ impl<'model> StereoCoreDecoder<'model> {
 
 impl StereoCoreDecoder<'static> {
     pub fn new_builtin() -> Result<Self, StereoCoreDecodeError> {
-        let model = crate::builtin_neural_model().map_err(NeuralQcError::from)?;
+        let model = crate::builtin_model::builtin_neural_model().map_err(NeuralQcError::from)?;
         Self::new(model)
     }
 }
@@ -445,10 +445,10 @@ impl fmt::Debug for StereoCoreDecoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        AudioCodecId, BitDepth, BitWriter, ChannelConfig, CodecProfile, TransformType,
-        float_to_pcm16,
-    };
+    use crate::bitstream::BitWriter;
+    use crate::core_side::TransformType;
+    use crate::header::{AudioCodecId, BitDepth, ChannelConfig, CodecProfile};
+    use crate::mono_backend::float_to_pcm16;
 
     fn header() -> FrameHeader {
         FrameHeader {

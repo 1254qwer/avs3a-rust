@@ -19,7 +19,7 @@
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::error::Mp4Error;
+pub use crate::error::Mp4Error;
 use crate::header::{MAX_HEADER_BYTES, MAX_PAYLOAD_BYTES, parse_header_at};
 use crate::stream::EncodedFrame;
 
@@ -1114,7 +1114,9 @@ impl<'a> Bytes<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BitWriter, ChannelConfig, crc16};
+    use crate::bitstream::BitWriter;
+    use crate::crc16;
+    use crate::header::ChannelConfig;
     use std::io::Cursor;
 
     fn boxed(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {

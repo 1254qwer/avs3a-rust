@@ -4,7 +4,9 @@ use crate::bwe::{BweSynthesis, BweSynthesisError};
 use crate::core_side::{CoreSideInfo, ParsedNeuralQc};
 use crate::fd_shaping::{FdShapingError, FdSpectrumShaping};
 use crate::header::{FrameHeader, MAX_CHANNELS, NnType};
-use crate::hoa::{HoaBitstreamConfig, HoaError, HoaSideInfo, HoaSideInfoDecoder, inverse_hoa_dmx};
+use crate::hoa_side::{
+    HoaBitstreamConfig, HoaError, HoaSideInfo, HoaSideInfoDecoder, inverse_hoa_dmx,
+};
 use crate::hoa_synthesis::{HoaPostSynthesis, HoaPostSynthesisError};
 use crate::mdct_synthesis::{MdctSynthesis, MdctSynthesisError};
 use crate::model::{AVS3_FEATURE_DIMENSIONS, NeuralModel};
@@ -404,7 +406,7 @@ impl<'model> HoaCoreDecoder<'model> {
 
 impl HoaCoreDecoder<'static> {
     pub fn new_builtin() -> Result<Self, HoaCoreDecodeError> {
-        let model = crate::builtin_neural_model().map_err(NeuralQcError::from)?;
+        let model = crate::builtin_model::builtin_neural_model().map_err(NeuralQcError::from)?;
         Self::new(model)
     }
 }
@@ -424,7 +426,7 @@ impl fmt::Debug for HoaCoreDecoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BitWriter;
+    use crate::bitstream::BitWriter;
     use crate::header::{AudioCodecId, BitDepth, ChannelConfig, CodecProfile};
 
     const AUDIO_BITS: usize = 4_038;

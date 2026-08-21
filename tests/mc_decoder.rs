@@ -1,7 +1,10 @@
-use avs3a::{
-    AVS3_FEATURE_DIMENSIONS, BitReader, BitWriter, ChannelConfig, FrameStream,
-    MC_LFE_RESERVED_LINES, McDecoderBackend, PendingDecoder, StreamEvent, crc16,
-};
+use avs3a::backend::McDecoderBackend;
+use avs3a::bitstream::{BitReader, BitWriter};
+use avs3a::decode::PendingDecoder;
+use avs3a::header::ChannelConfig;
+use avs3a::multichannel::MC_LFE_RESERVED_LINES;
+use avs3a::neural::AVS3_FEATURE_DIMENSIONS;
+use avs3a::{FrameStream, StreamEvent, crc16};
 
 const AUDIO_BITS: usize = 8_134;
 const FRAME_PAYLOAD_BITS: usize = AUDIO_BITS + 2;

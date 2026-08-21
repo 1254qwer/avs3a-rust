@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::builtin_neural_model;
+use crate::builtin_model::builtin_neural_model;
 use crate::cnn::{CnnError, ScalarCnnDecoder};
 use crate::feature_scale_tables::{LOW_COMPLEXITY_SCALE_BITS, MAIN_AMPLIFIED_SCALE_BITS};
 use crate::latent::{

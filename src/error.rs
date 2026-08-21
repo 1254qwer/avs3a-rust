@@ -3,7 +3,7 @@ use core::fmt;
 use crate::hoa_core::HoaCoreDecodeError;
 use crate::mc_core::McCoreDecodeError;
 use crate::metadata::MetadataError;
-use crate::mono::MonoCoreDecodeError;
+use crate::mono_core::MonoCoreDecodeError;
 use crate::stereo_core::StereoCoreDecodeError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

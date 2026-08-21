@@ -1,4 +1,4 @@
-use crate::error::BitstreamError;
+pub use crate::error::BitstreamError;
 
 /// MSB-first reader used by the AV3A header and side-information syntax.
 #[derive(Debug, Clone, Copy)]

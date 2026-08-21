@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::process::ExitCode;
 
-use avs3a::{
+use avs3a::neural::{
     CnnNetwork, DEFAULT_MAX_MODEL_BYTES, ModelEncoding, NeuralCodecModel, NeuralModel,
     NeuralModelType, ScalarCnnDecoder,
 };

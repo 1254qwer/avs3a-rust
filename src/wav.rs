@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 
-use crate::error::WavError;
+pub use crate::error::WavError;
 
 const WAV_HEADER_LEN: u64 = 44;
 const RIFF_DATA_OVERHEAD: u64 = 36;
@@ -91,11 +91,13 @@ impl<W: Write + Seek> WavWriter<W> {
 
         let inner = self.inner.as_mut().ok_or(WavError::NotFinalized)?;
         for chunk in samples.chunks(SAMPLES_PER_WRITE_CHUNK) {
-            for (sample, bytes) in chunk
-                .iter()
-                .zip(self.sample_bytes[..chunk.len() * 2].chunks_exact_mut(2))
-            {
-                bytes.copy_from_slice(&sample.to_le_bytes());
+            let encoded = &mut self.sample_bytes[..chunk.len() * 2];
+            // The slice is exactly two bytes per sample, so there is no
+            // remainder to handle.
+            let (pairs, remainder) = encoded.as_chunks_mut::<2>();
+            debug_assert!(remainder.is_empty());
+            for (sample, bytes) in chunk.iter().zip(pairs) {
+                *bytes = sample.to_le_bytes();
             }
             inner.write_all(&self.sample_bytes[..chunk.len() * 2])?;
         }

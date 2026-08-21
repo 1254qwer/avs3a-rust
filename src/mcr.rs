@@ -237,7 +237,7 @@ fn rotation(short_window: bool, codebook_index: usize, dimension: usize) -> (f32
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BitWriter;
+    use crate::bitstream::BitWriter;
 
     fn fnv1a(bytes: &[u8]) -> u64 {
         bytes.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {

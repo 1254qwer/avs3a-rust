@@ -4,11 +4,12 @@ use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use avs3a::{
-    CodecProfile, DecoderConfig, EncodedFrame, FrameHeader, FrameStream, ISO_BMFF_SNIFF_BYTES,
-    McSideInfoDecoder, MetadataPayloadParser, Mp4FrameReader, SoundBedType, StreamEvent,
-    is_iso_bmff,
-};
+use avs3a::decode::DecoderConfig;
+use avs3a::header::{CodecProfile, SoundBedType};
+use avs3a::metadata::MetadataPayloadParser;
+use avs3a::mp4::ISO_BMFF_SNIFF_BYTES;
+use avs3a::multichannel::McSideInfoDecoder;
+use avs3a::{EncodedFrame, FrameHeader, FrameStream, Mp4FrameReader, StreamEvent, is_iso_bmff};
 
 const READ_BUFFER_SIZE: usize = 64 * 1024;
 
@@ -282,7 +283,7 @@ fn record_configuration_change(
 
 #[cfg(test)]
 mod tests {
-    use avs3a::{AudioCodecId, BitDepth, ChannelConfig, NnType};
+    use avs3a::header::{AudioCodecId, BitDepth, ChannelConfig, NnType};
 
     use super::*;
 

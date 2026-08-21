@@ -1,7 +1,9 @@
-use avs3a::{
-    BitReader, BitWriter, ChannelConfig, FrameStream, MetadataPayloadParser, PendingDecoder,
-    StereoDecoderBackend, StreamEvent, crc16,
-};
+use avs3a::backend::StereoDecoderBackend;
+use avs3a::bitstream::{BitReader, BitWriter};
+use avs3a::decode::PendingDecoder;
+use avs3a::header::ChannelConfig;
+use avs3a::metadata::MetadataPayloadParser;
+use avs3a::{FrameStream, StreamEvent, crc16};
 
 mod support;
 

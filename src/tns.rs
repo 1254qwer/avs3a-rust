@@ -137,7 +137,8 @@ fn synthesis_lattice_sample(mut value: f32, parcor: &[f32], state: &mut [f32]) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BweConfig, CoreBitstreamConfig, LsfCodebookMode, MonoSideInfoDecoder, NnType};
+    use crate::core_side::{BweConfig, CoreBitstreamConfig, LsfCodebookMode, MonoSideInfoDecoder};
+    use crate::header::NnType;
 
     const REFERENCE_PAYLOAD: [u8; 35] = [
         0x44, 0x72, 0x61, 0x63, 0xb6, 0x23, 0xa0, 0xf0, 0xea, 0x00, 0xfb, 0xdc, 0x10, 0x30, 0x2f,

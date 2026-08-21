@@ -1,10 +1,14 @@
+use crate::decoder::{Decoder, PendingDecoder};
+use crate::error::DecodeError;
+use crate::header::{ChannelConfig, CodecProfile, FrameHeader};
+use crate::hoa_backend::HoaDecoderBackend;
 use crate::hoa_synthesis::HOA_BASIS_DELAY_FRAMES;
+use crate::mc_backend::McDecoderBackend;
+use crate::mc_side::is_multichannel_config;
 use crate::metadata_values::FrameMetadata;
-use crate::{
-    ChannelConfig, CodecProfile, DecodeError, Decoder, FrameHeader, HoaDecoderBackend,
-    McDecoderBackend, MixDecoderBackend, MonoDecoderBackend, PendingDecoder, StereoDecoderBackend,
-    is_multichannel_config,
-};
+use crate::mix_backend::MixDecoderBackend;
+use crate::mono_backend::MonoDecoderBackend;
+use crate::stereo_backend::StereoDecoderBackend;
 
 /// Frames to decode and discard after a reset before output is exact.
 ///
@@ -16,7 +20,7 @@ pub const CHANNEL_WARMUP_FRAMES: u64 = 1;
 /// HOA warm-up depth.
 ///
 /// HOA post-synthesis additionally delays the spatial basis indices by
-/// [`HOA_BASIS_DELAY_FRAMES`] frames, and its analysis stage reads the previous
+/// [`crate::hoa::HOA_BASIS_DELAY_FRAMES`] frames, and its analysis stage reads the previous
 /// frame's transport channels. The oldest basis slot therefore has to be filled
 /// by a frame whose transport channels were themselves already correct, which
 /// is what the extra frame over [`CHANNEL_WARMUP_FRAMES`] buys.
@@ -84,7 +88,7 @@ impl BuiltinDecoder {
     /// Decode into caller-owned interleaved PCM16 storage.
     pub fn decode_into(
         &mut self,
-        frame: &crate::EncodedFrame,
+        frame: &crate::stream::EncodedFrame,
         output: &mut [i16],
     ) -> Result<(), DecodeError> {
         dispatch!(self, |decoder| decoder.decode_into(frame, output))
@@ -97,7 +101,7 @@ impl BuiltinDecoder {
     /// undoing the PCM16 quantisation that [`Self::decode_into`] performs.
     pub fn decode_into_f32(
         &mut self,
-        frame: &crate::EncodedFrame,
+        frame: &crate::stream::EncodedFrame,
         output: &mut [f32],
     ) -> Result<(), DecodeError> {
         dispatch!(self, |decoder| decoder.decode_into_f32(frame, output))
@@ -107,7 +111,7 @@ impl BuiltinDecoder {
         dispatch!(self, |decoder| decoder.reset())
     }
 
-    pub fn config(&self) -> crate::DecoderConfig {
+    pub fn config(&self) -> crate::decoder::DecoderConfig {
         dispatch!(self, |decoder| decoder.config())
     }
 

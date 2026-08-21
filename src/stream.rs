@@ -1,5 +1,7 @@
 use crate::crc16;
-use crate::error::{HeaderError, StreamError};
+pub use crate::error::StreamError;
+
+use crate::error::HeaderError;
 use crate::header::{FrameHeader, MAX_HEADER_BYTES, MAX_PAYLOAD_BYTES, parse_header_at};
 
 const DEFAULT_BUFFER_LIMIT: usize = MAX_HEADER_BYTES + MAX_PAYLOAD_BYTES;
@@ -64,7 +66,7 @@ pub enum StreamEvent {
 /// Arbitrary input chunking is supported. A frame is emitted only after its
 /// complete payload is present; all indexing is therefore bounded by the
 /// parsed frame size. CRC status is retained on [`EncodedFrame`] for callers
-/// to inspect, while [`crate::Decoder`] enforces it before synthesis.
+/// to inspect, while [`crate::decoder::Decoder`] enforces it before synthesis.
 #[derive(Debug)]
 pub struct FrameStream {
     buffer: Vec<u8>,
@@ -197,7 +199,8 @@ fn flush_skipped(events: &mut Vec<StreamEvent>, skipped: &mut usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BitWriter, ChannelConfig};
+    use crate::bitstream::BitWriter;
+    use crate::header::ChannelConfig;
 
     fn make_frame(payload_byte: u8) -> Vec<u8> {
         // 64 kbps mono at 48 kHz: floor(64000 * 1024 / 48000) - 56

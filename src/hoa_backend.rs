@@ -139,7 +139,7 @@ impl DecoderBackend for HoaDecoderBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BitDepth, NnType};
+    use crate::header::{BitDepth, NnType};
 
     fn config(order: u8) -> DecoderConfig {
         let (channel_config, channels) = match order {

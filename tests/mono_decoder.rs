@@ -1,7 +1,9 @@
-use avs3a::{
-    BitReader, BitWriter, ChannelConfig, DecodeError, FrameStream, MonoDecoderBackend,
-    PendingDecoder, StreamEvent, TransformType, crc16,
-};
+use avs3a::backend::MonoDecoderBackend;
+use avs3a::bitstream::{BitReader, BitWriter};
+use avs3a::decode::PendingDecoder;
+use avs3a::header::ChannelConfig;
+use avs3a::side_info::TransformType;
+use avs3a::{DecodeError, FrameStream, StreamEvent, crc16};
 
 const SAMPLE_RATE_INDEX_96_KHZ: u64 = 1;
 const MONO_BITRATE_INDEX_64_KBPS: u64 = 4;

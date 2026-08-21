@@ -4,11 +4,11 @@ use crate::header::{ChannelConfig, CodecProfile, FrameHeader, SoundBedType};
 use crate::metadata::{MetadataPayloadParser, MetadataSummary};
 use crate::metadata_values::FrameMetadata;
 use crate::model::AVS3_FEATURE_DIMENSIONS;
-use crate::stereo::{STEREO_CHANNELS, StereoCodingMode};
 use crate::stereo_core::{
     McrCoreDiagnostics, STEREO_FRAME_SAMPLES, StereoCoreDecodeError, StereoCoreDecoder,
     StereoCoreDiagnostics,
 };
+use crate::stereo_side::{STEREO_CHANNELS, StereoCodingMode};
 
 /// Public backend for channel-based stereo AVS3 frames.
 ///

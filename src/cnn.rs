@@ -2,7 +2,7 @@ use core::fmt;
 
 use wide::f32x8;
 
-use crate::LatentShape;
+use crate::latent::LatentShape;
 use crate::model::{Activation, CnnLayer, CnnNetwork, Padding};
 
 pub const MAX_CNN_WORKSPACE_VALUES: usize = 1 << 20;
@@ -702,7 +702,7 @@ fn reformed_sum(length: usize, mut product: impl FnMut(usize) -> f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ModelEncoding, NeuralModel, NeuralModelType};
+    use crate::model::{ModelEncoding, NeuralModel, NeuralModelType};
 
     fn push_i16(output: &mut Vec<u8>, value: i16) {
         output.extend_from_slice(&value.to_le_bytes());

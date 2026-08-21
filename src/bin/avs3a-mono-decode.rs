@@ -4,9 +4,9 @@ use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use avs3a::{
-    Decoder, EncodedFrame, FrameStream, MonoDecoderBackend, PendingDecoder, StreamEvent, WavWriter,
-};
+use avs3a::backend::MonoDecoderBackend;
+use avs3a::decode::{Decoder, PendingDecoder};
+use avs3a::{EncodedFrame, FrameStream, StreamEvent, WavWriter};
 
 const READ_BUFFER_SIZE: usize = 64 * 1024;
 

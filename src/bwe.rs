@@ -322,10 +322,11 @@ fn apply_envelopes(config: BweConfig, side_info: BweSideInfo, spectrum: &mut [f3
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        BitWriter, CoreBitstreamConfig, LsfCodebookMode, MonoSideInfoDecoder, NnType,
-        ParsedNeuralQc,
+    use crate::bitstream::BitWriter;
+    use crate::core_side::{
+        CoreBitstreamConfig, LsfCodebookMode, MonoSideInfoDecoder, ParsedNeuralQc,
     };
+    use crate::header::NnType;
 
     const MAIN_REFERENCE_PAYLOAD: [u8; 35] = [
         0x44, 0x72, 0x61, 0x63, 0xb6, 0x23, 0xa0, 0xf0, 0xea, 0x00, 0xfb, 0xdc, 0x10, 0x30, 0x2f,

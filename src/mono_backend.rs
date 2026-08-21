@@ -5,12 +5,12 @@ use crate::header::{ChannelConfig, CodecProfile, FrameHeader, SoundBedType};
 use crate::metadata::{MetadataPayloadParser, MetadataSummary};
 use crate::metadata_values::FrameMetadata;
 use crate::model::AVS3_FEATURE_DIMENSIONS;
-use crate::mono::{MonoCoreDecodeError, MonoCoreDecoder, MonoCoreDiagnostics};
+use crate::mono_core::{MonoCoreDecodeError, MonoCoreDecoder, MonoCoreDiagnostics};
 
 /// Public decoder backend for channel-based mono AVS3 frames.
 ///
 /// The backend owns all entropy, DSP, random and overlap state and emits the
-/// core's native floating output; [`crate::Decoder`] quantises it to PCM16.
+/// core's native floating output; [`crate::decoder::Decoder`] quantises it to PCM16.
 #[derive(Debug)]
 pub struct MonoDecoderBackend {
     core: MonoCoreDecoder<'static>,

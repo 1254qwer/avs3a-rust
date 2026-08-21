@@ -6,7 +6,7 @@ use crate::bwe::{BweSynthesis, BweSynthesisError};
 use crate::core_side::{CoreSideInfo, ParsedNeuralQc};
 use crate::fd_shaping::{FdShapingError, FdSpectrumShaping};
 use crate::header::{FrameHeader, MAX_CHANNELS, NnType};
-use crate::mc::{
+use crate::mc_side::{
     McBitstreamConfig, McError, McSideInfo, McSideInfoDecoder, clear_mc_lfe_spectrum,
     inverse_mc_coupling,
 };
@@ -446,7 +446,7 @@ impl<'model> McCoreDecoder<'model> {
 
 impl McCoreDecoder<'static> {
     pub fn new_builtin() -> Result<Self, McCoreDecodeError> {
-        let model = crate::builtin_neural_model().map_err(NeuralQcError::from)?;
+        let model = crate::builtin_model::builtin_neural_model().map_err(NeuralQcError::from)?;
         Self::new(model)
     }
 }
@@ -476,7 +476,8 @@ impl fmt::Debug for McCoreDecoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AudioCodecId, BitDepth, BitWriter, ChannelConfig, CodecProfile};
+    use crate::bitstream::BitWriter;
+    use crate::header::{AudioCodecId, BitDepth, ChannelConfig, CodecProfile};
 
     fn header(payload_bits: usize) -> FrameHeader {
         FrameHeader {
@@ -562,7 +563,7 @@ mod tests {
         assert!(output.iter().all(|sample| sample.is_finite()));
         let spectra = decoder.last_shaped_spectra();
         assert!(
-            spectra[3][crate::MC_LFE_RESERVED_LINES..]
+            spectra[3][crate::mc_side::MC_LFE_RESERVED_LINES..]
                 .iter()
                 .all(|&value| value == 0.0)
         );

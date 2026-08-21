@@ -3,7 +3,7 @@ use core::fmt;
 use crate::bitstream::BitReader;
 use crate::error::BitstreamError;
 use crate::header::MAX_PAYLOAD_BYTES;
-use crate::metadata_values::*;
+pub use crate::metadata_values::*;
 
 pub const METADATA_PRESENCE_BITS: usize = 2;
 pub const MAX_DYNAMIC_METADATA_OBJECTS: usize = 32;
@@ -1101,7 +1101,8 @@ fn parse_dynamic_l2(reader: &mut BitReader<'_>) -> Result<DynamicLevel2Metadata,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BitWriter, MAX_PAYLOAD_BYTES};
+    use crate::bitstream::BitWriter;
+    use crate::header::MAX_PAYLOAD_BYTES;
 
     fn write(writer: &mut BitWriter, value: u64, width: usize) {
         writer.write_bits(value, width).unwrap();

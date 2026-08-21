@@ -134,7 +134,7 @@ impl DecoderBackend for MixDecoderBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BitDepth, ChannelConfig, NnType};
+    use crate::header::{BitDepth, ChannelConfig, NnType};
 
     fn config(objects: u8) -> DecoderConfig {
         DecoderConfig {

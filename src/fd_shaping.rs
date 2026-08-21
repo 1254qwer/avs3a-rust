@@ -357,7 +357,8 @@ fn table_value(table_offset: usize, index: usize) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BweConfig, CoreBitstreamConfig, MonoSideInfoDecoder, NnType};
+    use crate::core_side::{BweConfig, CoreBitstreamConfig, MonoSideInfoDecoder};
+    use crate::header::NnType;
 
     const HBR_PAYLOAD: [u8; 35] = [
         0x44, 0x72, 0x61, 0x63, 0xb6, 0x23, 0xa0, 0xf0, 0xea, 0x00, 0xfb, 0xdc, 0x10, 0x30, 0x2f,

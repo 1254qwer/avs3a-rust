@@ -5,9 +5,10 @@ use std::io::{BufReader, ErrorKind, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use avs3a::mp4::ISO_BMFF_SNIFF_BYTES;
+use avs3a::neural::AVS3_FEATURE_DIMENSIONS;
 use avs3a::{
-    AVS3_FEATURE_DIMENSIONS, BuiltinDecoder, EncodedFrame, FrameStream, ISO_BMFF_SNIFF_BYTES,
-    Mp4FrameReader, StreamEvent, WavWriter, is_iso_bmff,
+    BuiltinDecoder, EncodedFrame, FrameStream, Mp4FrameReader, StreamEvent, WavWriter, is_iso_bmff,
 };
 
 const READ_BUFFER_SIZE: usize = 64 * 1024;

@@ -1,9 +1,12 @@
-use avs3a::{
-    AVS3_FEATURE_DIMENSIONS, AudioCodecId, BitDepth, BitReader, BitWriter, ChannelConfig,
-    CodecProfile, FrameHeader, FrameStream, MC_LFE_RESERVED_LINES, McBitstreamConfig, McSideInfo,
-    MixCoreKind, MixDecoderBackend, NnType, PendingDecoder, SoundBedType, StreamEvent, crc16,
-    mc_bytes_allocation,
+use avs3a::backend::{MixCoreKind, MixDecoderBackend};
+use avs3a::bitstream::{BitReader, BitWriter};
+use avs3a::decode::PendingDecoder;
+use avs3a::header::{AudioCodecId, BitDepth, ChannelConfig, CodecProfile, NnType, SoundBedType};
+use avs3a::multichannel::{
+    MC_LFE_RESERVED_LINES, McBitstreamConfig, McSideInfo, mc_bytes_allocation,
 };
+use avs3a::neural::AVS3_FEATURE_DIMENSIONS;
+use avs3a::{FrameHeader, FrameStream, StreamEvent, crc16};
 
 mod support;
 

@@ -10,9 +10,8 @@ use std::fs;
 use std::io::Cursor;
 use std::path::PathBuf;
 
-use avs3a::{
-    Av3aTrack, BuiltinDecoder, EncodedFrame, FrameStream, Mp4Error, Mp4FrameReader, StreamEvent,
-};
+use avs3a::mp4::Mp4Error;
+use avs3a::{Av3aTrack, BuiltinDecoder, EncodedFrame, FrameStream, Mp4FrameReader, StreamEvent};
 
 /// Samples per chunk in the muxed files, chosen so the last chunk is short and
 /// the sample-to-chunk table needs two runs.

@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use crate::{ModelEncoding, ModelError, NeuralModel, NeuralModelType};
+use crate::model::{ModelEncoding, ModelError, NeuralModel, NeuralModelType};
 
 pub const BUILTIN_MODEL_LEN: usize = 79_930;
 pub const BUILTIN_MODEL_FNV1A: u64 = 0xc16c_f4fc_1e16_52b0;
@@ -33,7 +33,8 @@ pub fn builtin_neural_model() -> Result<&'static NeuralModel, ModelError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{LatentShape, ScalarCnnDecoder};
+    use crate::cnn::ScalarCnnDecoder;
+    use crate::latent::LatentShape;
 
     fn fnv1a(bytes: &[u8]) -> u64 {
         bytes.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {

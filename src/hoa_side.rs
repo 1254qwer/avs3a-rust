@@ -8,7 +8,7 @@ use crate::core_side::{
 };
 use crate::error::BitstreamError;
 use crate::header::{ChannelConfig, CodecProfile, FrameHeader, MAX_CHANNELS};
-use crate::mc::{MC_NO_ILD_INDEX, McError, apply_mc_ild};
+use crate::mc_side::{MC_NO_ILD_INDEX, McError, apply_mc_ild};
 use crate::model::AVS3_FEATURE_DIMENSIONS;
 use crate::neural_qc::MAX_QC_BITSTREAM_BYTES;
 
@@ -1036,7 +1036,8 @@ impl Default for HoaSideInfoDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AudioCodecId, BitDepth, BitWriter, NnType};
+    use crate::bitstream::BitWriter;
+    use crate::header::{AudioCodecId, BitDepth, NnType};
 
     fn header(order: u8, bitrate: u32, payload_bits: usize) -> FrameHeader {
         let channel_config = match order {
