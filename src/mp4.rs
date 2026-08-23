@@ -181,7 +181,17 @@ impl Av3aTrack {
             }
             pos = pos.checked_add(total).ok_or(Mp4Error::ArithmeticOverflow)?;
         }
-        Err(Mp4Error::MissingBox { kind: *b"moov" })
+        // Every box in the prefix was complete and none of them was `moov`, so
+        // it lives past the end of what we were given. A prefix cannot tell
+        // "truncated here" apart from "this file has no moov at all", and
+        // reporting the latter would strand a caller whose window merely happened
+        // to end on a box boundary — padding before `moov` does exactly that. Ask
+        // for the eight bytes that would reveal the next box header instead, and
+        // leave it to the caller, which knows the total length, to give up.
+        Err(Mp4Error::NeedMoreData {
+            needed: offset_plus(pos, 8)?,
+            available,
+        })
     }
 
     /// `tkhd` track identifier.
