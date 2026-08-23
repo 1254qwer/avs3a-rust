@@ -244,7 +244,7 @@ fn public_framing_crc_and_hoa_backend_decode_complete_foa_frame() {
     assert_eq!(diagnostics.entropy_bytes(), &[115, 112, 112, 112]);
     assert_eq!(diagnostics.consumed_bits(), 4_033);
     assert_eq!(diagnostics.padding_bits(), 5);
-    assert_eq!(pcm_fingerprint(&samples), 0x4244_691c_01a8_dc66);
+    assert_eq!(pcm_fingerprint(&samples), 0x40e3_59b5_62c0_0869);
     assert!(samples.iter().any(|&sample| sample != 0));
 }
 
@@ -316,14 +316,14 @@ fn hoa3_spatial_pipeline_uses_nine_transports_and_two_frame_basis_delay() {
         fingerprints,
         expected_rustfft_fingerprint(
             [
-                0xe3ee_95db_af37_11f4,
-                0x703d_2b13_3c8a_88f4,
-                0x22ae_e220_dd46_d44e,
+                0xa46b_c1de_4fc8_1b1c,
+                0xe405_a126_80ee_8068,
+                0x3d6f_694f_6eb2_a076,
             ],
             [
-                0x4c17_2195_be5f_d671,
-                0x831e_ca86_e8cc_edc0,
-                0x8225_75ad_bd13_8884,
+                0xe640_8d2c_463a_5b0f,
+                0xe405_a126_80ee_8068,
+                0x0693_033a_62cd_ee5d
             ],
         )
     );

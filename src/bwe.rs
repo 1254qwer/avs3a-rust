@@ -280,7 +280,8 @@ impl BweSynthesis {
                     }
                     if absolute_sum > 0.0 {
                         for output in &mut spectrum[start..stop] {
-                            *output = (random.next_u31() as f32 / AVS3_RAND_MAX as f32) * 2.0 - 1.0;
+                            // Mirrors bwe_dec.c: (rand() / RAND_MAX) * 2 - 1.
+                            *output = (random.rand() as f32 / AVS3_RAND_MAX as f32) * 2.0 - 1.0;
                         }
                     } else {
                         spectrum[start..stop].fill(0.0);
@@ -424,7 +425,7 @@ mod tests {
             .apply(config, side_info, &mut spectrum, &mut random)
             .unwrap();
 
-        assert_eq!(fingerprint(&spectrum), 0x8be4_1361_14fb_34a5);
+        assert_eq!(fingerprint(&spectrum), 0xce5c_a9b3_e08f_ef01);
         let positions = [
             0, 351, 352, 353, 415, 479, 480, 543, 544, 607, 608, 671, 672, 767, 768, 831, 832, 900,
             1023,
@@ -442,18 +443,18 @@ mod tests {
                 0xc0ac_a9d1,
                 0xc200_a823,
                 0x4215_3bb6,
-                0x43ed_2f34,
-                0x43f4_aabd,
-                0xc5ca_2973,
-                0x460a_7c27,
-                0,
-                0,
-                0,
-                0,
-                0,
+                0xc3ea_b0d7,
+                0x41e9_c956,
+                0x4508_2276,
+                0x4607_f117,
+                0x0000_0000,
+                0x0000_0000,
+                0x0000_0000,
+                0x0000_0000,
+                0x0000_0000,
             ]
         );
-        assert_eq!(random.next_u31(), 1_231_192_379);
+        assert_eq!(random.rand(), 8_271);
     }
 
     #[test]
@@ -465,7 +466,7 @@ mod tests {
             .apply(config, side_info, &mut spectrum, &mut random)
             .unwrap();
 
-        assert_eq!(fingerprint(&spectrum), 0xe8de_94e6_7b24_f1df);
+        assert_eq!(fingerprint(&spectrum), 0x15b0_c9ff_4beb_6f0a);
         let positions = [
             0, 351, 352, 353, 415, 479, 480, 543, 544, 607, 608, 671, 672, 767, 768, 831, 832, 900,
             1023,
@@ -485,16 +486,16 @@ mod tests {
                 0x3eb4_3f9e,
                 0x45ad_1ae1,
                 0x45b0_7100,
-                0x41c9_7195,
-                0x428a_0134,
-                0xc184_3ce6,
-                0x4250_1d1d,
-                0,
-                0,
-                0,
+                0xc1c7_536b,
+                0xc219_7e06,
+                0x4170_7ac9,
+                0x424c_4ab3,
+                0x0000_0000,
+                0x0000_0000,
+                0x0000_0000,
             ]
         );
-        assert_eq!(random.next_u31(), 1_231_192_379);
+        assert_eq!(random.rand(), 8_271);
     }
 
     #[test]
@@ -512,7 +513,7 @@ mod tests {
                 actual: 17,
             }
         );
-        assert_eq!(random.next_u31(), 1_804_289_383);
+        assert_eq!(random.rand(), 5_871);
         assert_eq!(short_spectrum, [1.0; 17]);
     }
 }

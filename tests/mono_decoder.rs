@@ -158,7 +158,7 @@ fn public_framing_crc_and_mono_decoder_match_the_c_pipeline_vector() {
     let positions = [0, 447, 448, 449, 575, 576, 700, 900, 1023];
     assert_eq!(
         positions.map(|position| audio.samples()[position]),
-        [0, 0, 50, -194, -8_089, 3_802, i16::MAX, i16::MIN, i16::MIN]
+        [0, 0, -71, -307, 11_619, 2_981, i16::MAX, i16::MAX, 10_399]
     );
 
     let clipped_before = decoder.total_clipped_samples();

@@ -727,7 +727,7 @@ impl<'model> NeuralSpectrumDecoder<'model> {
                 for (channel, &median) in medians.iter().enumerate() {
                     let index = dimension + channel * shape.dimensions();
                     if self.base_dequantized[index] == median {
-                        let mut noise = random.next_u31() as f32 / AVS3_RAND_MAX as f32;
+                        let mut noise = random.rand() as f32 / AVS3_RAND_MAX as f32;
                         noise = noise * 2.0_f32 - 1.0_f32;
                         noise *= noise_parameter;
                         self.base_dequantized[index] += noise;
@@ -919,7 +919,7 @@ mod tests {
             .unwrap();
         let expected_spectrum = decoded.spectrum().to_vec();
         let expected_diagnostics = decoded.diagnostics();
-        let expected_next_random = one_shot_random.next_u31();
+        let expected_next_random = one_shot_random.rand();
 
         let mut staged = NeuralSpectrumDecoder::new_builtin().unwrap();
         let mut staged_random = Avs3Random::new();
@@ -929,7 +929,7 @@ mod tests {
             .unwrap();
         assert_eq!(decoded.spectrum(), expected_spectrum);
         assert_eq!(decoded.diagnostics(), expected_diagnostics);
-        assert_eq!(staged_random.next_u31(), expected_next_random);
+        assert_eq!(staged_random.rand(), expected_next_random);
 
         let lc_input = LowComplexityNeuralQc::new(streams, noise, 91);
         let mut one_shot = NeuralSpectrumDecoder::new_builtin().unwrap();
@@ -939,7 +939,7 @@ mod tests {
             .unwrap();
         let expected_spectrum = decoded.spectrum().to_vec();
         let expected_diagnostics = decoded.diagnostics();
-        let expected_next_random = one_shot_random.next_u31();
+        let expected_next_random = one_shot_random.rand();
 
         let mut staged = NeuralSpectrumDecoder::new_builtin().unwrap();
         let mut staged_random = Avs3Random::new();
@@ -949,7 +949,7 @@ mod tests {
             .unwrap();
         assert_eq!(decoded.spectrum(), expected_spectrum);
         assert_eq!(decoded.diagnostics(), expected_diagnostics);
-        assert_eq!(staged_random.next_u31(), expected_next_random);
+        assert_eq!(staged_random.rand(), expected_next_random);
     }
 
     #[test]
@@ -984,7 +984,7 @@ mod tests {
                 &mut random,
             )
             .unwrap();
-        assert_eq!(feature_fingerprint(main.spectrum()), 0x015b_ee23_8ed6_728b);
+        assert_eq!(feature_fingerprint(main.spectrum()), 0x6f52_55b8_f127_507e);
         assert_eq!(main.diagnostics().feature_scale().to_bits(), 0x402c_59ba);
         assert_eq!(
             main.diagnostics().noise_parameters().map(f32::to_bits),
@@ -993,39 +993,39 @@ mod tests {
         assert_eq!(
             positions.map(|index| main.spectrum()[index].to_bits()),
             [
-                0xc0fa_fd0b,
-                0xc146_9233,
-                0x3fd8_1188,
-                0xc018_c098,
-                0xc15b_80d0,
-                0xc093_07db,
-                0xbf0d_0454,
-                0xc1e2_f7af,
+                0x41b9_cc82,
+                0xc0d2_7bed,
+                0x415a_f547,
+                0xc10b_83c5,
+                0xc133_e40c,
+                0x419b_ea7b,
+                0x4248_12d9,
+                0xbf06_260c,
                 0x3eb6_f4bc,
             ]
         );
-        assert_eq!(random.next_u31(), 1_738_110_294);
+        assert_eq!(random.rand(), 4_143);
 
         let mut random = Avs3Random::new();
         let lc = decoder
             .decode_low_complexity(LowComplexityNeuralQc::new(streams, noise, 91), &mut random)
             .unwrap();
-        assert_eq!(feature_fingerprint(lc.spectrum()), 0x9e96_9a84_2e47_42b1);
+        assert_eq!(feature_fingerprint(lc.spectrum()), 0x99de_feab_033a_dc38);
         assert_eq!(lc.diagnostics().feature_scale().to_bits(), 0x36f0_3e57);
         assert_eq!(
             positions.map(|index| lc.spectrum()[index].to_bits()),
             [
-                0x463e_d90d,
-                0xc56d_0204,
-                0x4669_7d13,
-                0x4598_4545,
-                0x458e_ac4c,
-                0x4688_140d,
-                0xc531_24c6,
-                0x46fb_8a13,
+                0xc633_fc55,
+                0x44d1_e7a4,
+                0xc650_37e9,
+                0xc627_1c51,
+                0x4444_d2fe,
+                0x4678_9591,
+                0x444b_94da,
+                0x468d_4026,
                 0x0000_0000,
             ]
         );
-        assert_eq!(random.next_u31(), 1_738_110_294);
+        assert_eq!(random.rand(), 4_143);
     }
 }

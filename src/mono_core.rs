@@ -365,13 +365,13 @@ mod tests {
         let expected_bits = [
             0x0000_0000,
             0x0000_0000,
-            0x4246_8943,
-            0xc341_b5ac,
-            0xc5fc_c7eb,
-            0x456d_9e5b,
-            0x47e5_049c,
-            0xc7a1_3978,
-            0xc814_5ff6,
+            0xc28e_961e,
+            0xc399_94f8,
+            0x4635_8b5b,
+            0x453a_4a96,
+            0x493e_aafe,
+            0x4865_1ac3,
+            0x4622_7d69,
         ];
         for (position, bits) in positions.into_iter().zip(expected_bits) {
             let expected = f32::from_bits(bits);
@@ -383,7 +383,7 @@ mod tests {
                 output[position]
             );
         }
-        assert_eq!(decoder.random_mut().next_u31(), 431_530_126);
+        assert_eq!(decoder.random_mut().rand(), 22_847);
     }
 
     #[test]

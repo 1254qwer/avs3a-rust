@@ -339,7 +339,7 @@ fn object_only_mix_dispatches_to_mono_core() {
     );
     assert_eq!(
         pcm_fingerprint(audio.samples()),
-        expected_rustfft_fingerprint(0xba61_f453_9d48_5862, 0x7f23_d010_f66f_1695)
+        expected_rustfft_fingerprint(0x4b50_cda0_531f_6de7, 0xac95_a61e_b266_0e08)
     );
 }
 
@@ -364,7 +364,7 @@ fn two_object_mix_uses_low_bitrate_mcr() {
     assert_eq!(stereo.last_mcr_diagnostics().unwrap().entropy_bytes(), 47);
     assert_eq!(
         pcm_fingerprint(audio.samples()),
-        expected_rustfft_fingerprint(0x291b_df9d_9077_9ad0, 0xdf7d_c254_a177_6513)
+        expected_rustfft_fingerprint(0x424c_72bb_ab88_e2ed, 0x424c_72bb_ab88_e2ed)
     );
 }
 
@@ -414,5 +414,5 @@ fn channel_bed_mix_keeps_lfe_before_objects_in_coupling_order() {
             .iter()
             .all(|&value| value == 0.0)
     );
-    assert_eq!(pcm_fingerprint(audio.samples()), 0xf9ff_0e5e_e744_7013);
+    assert_eq!(pcm_fingerprint(audio.samples()), 0x4b4f_cc29_bfb4_2d50);
 }

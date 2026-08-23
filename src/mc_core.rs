@@ -341,7 +341,7 @@ impl<'model> McCoreDecoder<'model> {
             let draws = self.neural[channel].noise_random_draws(result)?;
             channel_randoms[channel] = frame_random.clone();
             for _ in 0..draws {
-                frame_random.next_u31();
+                frame_random.rand();
             }
             prepared_ok[channel] = Some(result);
         }

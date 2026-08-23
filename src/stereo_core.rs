@@ -590,10 +590,10 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     fn short_mcr_fingerprint_baseline() -> [u64; 4] {
         [
-            0xc5fd_6984_de2a_265b,
-            0xd1f0_c0eb_b745_3453,
-            0x7515_3048_77e6_198f,
-            0x291b_df9d_9077_9ad0,
+            0x2d79_c57a_9660_73b0,
+            0xcba3_1af0_a3d7_896e,
+            0x69e6_295f_16ff_d991,
+            0x424c_72bb_ab88_e2ed,
         ]
     }
 
@@ -602,10 +602,10 @@ mod tests {
         // Stable RustFFT 6.4.1 NEON output reproduced by Android and Linux,
         // macOS and Windows AArch64 CI.
         [
-            0xd81e_4999_9fcd_2ad4,
-            0xa4ca_e75c_01e5_1ffb,
-            0x8e50_4505_bdb3_9357,
-            0xdf7d_c254_a177_6513,
+            0x93eb_7a4a_ad6d_c36d,
+            0x93e9_f1b0_b0d6_ae60,
+            0xcaef_4b19_19b8_19e7,
+            0x424c_72bb_ab88_e2ed,
         ]
     }
 
@@ -629,8 +629,8 @@ mod tests {
         let mut random = Avs3Random::new();
         let mut spectra = [[0.0_f32; AVS3_FEATURE_DIMENSIONS]; STEREO_CHANNELS];
         let mut reorder = [SpectrumReorder::new(), SpectrumReorder::new()];
-        let expected_neural = [0xa8c7_da41_5b7c_0077, 0xd085_01af_39c6_f24a];
-        let expected_degroup = [0xab1c_f5b2_51a8_83ed, 0xc692_e63d_2748_078e];
+        let expected_neural = [0xaee0_cab5_8884_a431, 0x4ffc_a369_bd49_68dd];
+        let expected_degroup = [0xf98a_240a_9a03_3477, 0x7cc8_b272_99a9_61d7];
         for channel in 0..STEREO_CHANNELS {
             let ParsedNeuralQc::Main(input) = neural_qc[channel] else {
                 panic!("reference uses Main QC")
@@ -652,7 +652,7 @@ mod tests {
         inverse_mid_side(left, right, 5).unwrap();
         assert_eq!(
             spectra.map(|spectrum| fingerprint(&spectrum)),
-            [0xbede_6807_c5ff_18bc, 0xf4b0_b67e_b088_a681]
+            [0x9f40_13ae_8df2_0caf, 0x04f2_806a_8fe4_7c16]
         );
 
         let config = BweConfig::for_stereo_bitrate(header.bitrate)
@@ -671,9 +671,9 @@ mod tests {
         }
         assert_eq!(
             spectra.map(|spectrum| fingerprint(&spectrum)),
-            [0xc0c7_b467_f043_8bcc, 0x5408_b4f8_499e_2b6b]
+            [0xa434_6a6b_5935_d815, 0x5f7a_0148_f03c_77f2]
         );
-        assert_eq!(random.next_u31(), 845_563_291);
+        assert_eq!(random.rand(), 15_951);
     }
 
     #[test]
@@ -703,24 +703,24 @@ mod tests {
             [
                 0x0000_0000,
                 0x0000_0000,
-                0xbdda_2442,
-                0xbeac_46be,
-                0x418a_df1d,
-                0x405d_2365,
-                0xc0ba_a027,
-                0x415f_9cd4,
-                0x4258_78c0,
+                0x3dfa_39c2,
+                0x3ebc_2464,
+                0xc19f_4bec,
+                0xc1aa_f207,
+                0xc12d_4d84,
+                0x4245_31fa,
+                0x4309_c878,
             ],
             [
                 0x0000_0000,
                 0x0000_0000,
-                0xbeae_a800,
-                0xbf67_19ae,
-                0x425e_605e,
-                0x4284_283c,
-                0x429e_873f,
-                0x431e_1ccc,
-                0xc297_ad28,
+                0x3cc1_942e,
+                0x3e89_16ea,
+                0xc076_7818,
+                0x41d8_72ae,
+                0xc200_9402,
+                0x4106_57f0,
+                0xc20d_86e5,
             ],
         ];
         for channel in 0..STEREO_CHANNELS {
@@ -737,8 +737,8 @@ mod tests {
         }
         let mut pcm = [0_i16; STEREO_FRAME_SAMPLES];
         assert_eq!(float_to_pcm16(&output, &mut pcm), 0);
-        assert_eq!(pcm_fingerprint(&pcm), 0xa036_2bb2_f0ab_465a);
-        assert_eq!(decoder.random_mut().next_u31(), 845_563_291);
+        assert_eq!(pcm_fingerprint(&pcm), 0x15d6_a74e_bf75_9e26);
+        assert_eq!(decoder.random_mut().rand(), 15_951);
     }
 
     #[test]
@@ -771,28 +771,28 @@ mod tests {
         let positions = [448, 449, 575, 576, 694, 900, 965, 994, 1022, 1023];
         let expected = [
             [
-                0xbd0a_be6b,
-                0xbee3_30ff,
-                0x40b0_a6e3,
-                0xc183_3dc7,
-                0xc1a7_7568,
-                0x4303_cceb,
-                0xc2a0_435d,
-                0x42c6_fc51,
-                0x414a_e514,
-                0x4188_96ef,
+                0xbdca_0c46,
+                0xbe1f_6d65,
+                0x4180_a048,
+                0x41d1_f8a0,
+                0xc2bd_a35c,
+                0x4286_8b80,
+                0x42c1_80a5,
+                0x42cb_2c6b,
+                0x4234_e29b,
+                0x429b_230a,
             ],
             [
-                0xbd9a_b671,
-                0x3e8a_f4c6,
-                0x4144_fbdb,
-                0x421c_f900,
-                0x4206_0032,
-                0xc346_7f35,
-                0x426a_8d86,
-                0xc205_fe83,
-                0xc214_b324,
-                0xc266_d717,
+                0x3e2f_da82,
+                0x3dce_3622,
+                0xc1df_e6a0,
+                0xc235_99db,
+                0x428f_37d8,
+                0x3f76_8e70,
+                0xc298_e52c,
+                0xc107_113a,
+                0xc227_3fd2,
+                0xc291_de9d,
             ],
         ];
         for channel in 0..STEREO_CHANNELS {

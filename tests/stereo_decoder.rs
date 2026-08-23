@@ -234,7 +234,7 @@ fn public_framing_crc_and_ordinary_stereo_backend_match_c_pcm16() {
     assert_eq!(audio.samples().len(), 2_048);
     assert_eq!(decoder.frame_index(), 1);
     assert_eq!(decoder.last_clipped_samples(), 0);
-    assert_eq!(pcm_fingerprint(audio.samples()), 0xa036_2bb2_f0ab_465a);
+    assert_eq!(pcm_fingerprint(audio.samples()), 0x15d6_a74e_bf75_9e26);
     let metadata = decoder.backend().last_metadata().unwrap();
     assert_eq!(metadata.consumed_bits(), 2);
     assert_eq!(metadata.audio_bits(), 1_307);
@@ -271,7 +271,7 @@ fn public_framing_crc_and_mcr_stereo_backend_decode_payload() {
     assert_eq!(diagnostics.padding_bits(), 7);
     assert_eq!(
         pcm_fingerprint(audio.samples()),
-        expected_rustfft_fingerprint(0x291b_df9d_9077_9ad0, 0xdf7d_c254_a177_6513)
+        expected_rustfft_fingerprint(0x424c_72bb_ab88_e2ed, 0x424c_72bb_ab88_e2ed)
     );
 }
 
@@ -309,7 +309,7 @@ fn public_backend_retains_complete_static_metadata_values() {
         [60, 62]
     );
     assert_eq!(audio.samples().len(), 2_048);
-    assert_eq!(pcm_fingerprint(audio.samples()), 0xa036_2bb2_f0ab_465a);
+    assert_eq!(pcm_fingerprint(audio.samples()), 0x15d6_a74e_bf75_9e26);
 }
 
 #[test]

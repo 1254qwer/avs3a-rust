@@ -1,83 +1,68 @@
-/// Largest value returned by the AVS3-compatible pseudo-random generator.
-///
-/// The C reference divides `rand()` by `RAND_MAX`.  Fixing that value here is
-/// important: it is not guaranteed to be the same on every C runtime.
-pub const AVS3_RAND_MAX: u32 = 2_147_483_647;
+//! The pseudo-random stream AVS3 decoders draw noise from.
+//!
+//! Two decode stages consume it — BWE whitening and latent noise filling — so
+//! both the sequence and the number of draws per frame have to match the
+//! reference, or the output diverges for the rest of the frame.
+//!
+//! The reference defines its own `rand()` in `bwe_dec.c`, which at link time
+//! overrides the C library's for every translation unit:
+//!
+//! ```c
+//! #define RAND_MAX 0x7FFF
+//! static unsigned int seed = 432078;
+//! int rand() { seed = (1103515245 * seed + 12345) & RAND_MAX; return (int)seed; }
+//! ```
+//!
+//! That `#define` is local to `bwe_dec.c`, so `noise_filling.c` — which only
+//! includes `<stdlib.h>` — divides by the C library's `RAND_MAX` instead. Under
+//! glibc that is `2147483647`, and since the generator never returns more than
+//! `32767` the noise term collapses to a near-constant `-1.0` rather than
+//! spanning the `[-1, 1]` its own comment describes. That is a build defect
+//! rather than intended behaviour, so both call sites here divide by
+//! [`AVS3_RAND_MAX`].
 
-const STATE_DEGREE: usize = 31;
-const STATE_SEPARATION: usize = 3;
-const PARK_MILLER_MULTIPLIER: u64 = 16_807;
+/// Value the reference divides `rand()` by, and the largest it can return.
+pub const AVS3_RAND_MAX: u32 = 0x7FFF;
 
-/// Decoder-local replacement for the C implementation's process-global
-/// `rand()` state.
+const INITIAL_SEED: u32 = 432_078;
+const MULTIPLIER: u32 = 1_103_515_245;
+const INCREMENT: u32 = 12_345;
+
+/// Decoder-local replacement for the C implementation's global seed.
 ///
-/// The default state reproduces glibc's unseeded `rand()` sequence (seed 1),
-/// which is what the AVS3 reference decoder uses on Linux.  Keeping the state
-/// explicit makes frame/channel ordering deterministic and avoids coupling
-/// independent decoder instances through a libc global.
+/// Keeping the state explicit stops independent decoder instances from coupling
+/// through one global. The stream is still free-running within an instance: it is
+/// seeded once and advances with every draw, so output depends on how many frames
+/// have been decoded and not on the bitstream alone. That is the C behaviour, and
+/// it is why AV3A cannot be seeked sample-exactly.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Avs3Random {
-    state: [u32; STATE_DEGREE],
-    front: usize,
-    rear: usize,
+    seed: u32,
 }
 
 impl Avs3Random {
-    /// Construct the glibc-compatible default stream (seed 1).
+    /// Construct the stream from the reference's initial seed.
     pub fn new() -> Self {
-        Self::from_seed(1)
+        Self::from_seed(INITIAL_SEED)
     }
 
-    /// Construct a deterministic stream from a positive 31-bit seed.
-    ///
-    /// Seed zero follows glibc and is treated as seed one. Values outside the
-    /// positive signed 31-bit range are reduced modulo `RAND_MAX`; the AVS3
-    /// compatibility path itself always uses the default seed.
+    /// Construct a stream from an explicit seed, for tests.
     pub fn from_seed(seed: u32) -> Self {
-        let mut normalized = seed % AVS3_RAND_MAX;
-        if normalized == 0 {
-            normalized = 1;
-        }
-
-        let mut state = [0_u32; STATE_DEGREE];
-        state[0] = normalized;
-        for index in 1..STATE_DEGREE {
-            state[index] = ((u64::from(state[index - 1]) * PARK_MILLER_MULTIPLIER)
-                % u64::from(AVS3_RAND_MAX)) as u32;
-        }
-
-        let mut random = Self {
-            state,
-            front: STATE_SEPARATION,
-            rear: 0,
-        };
-        // glibc discards 10 * degree values after initializing TYPE_3 state.
-        for _ in 0..STATE_DEGREE * 10 {
-            random.next_u31();
-        }
-        random
+        Self { seed }
     }
 
-    /// Reset this state to the unseeded C/glibc sequence.
+    /// Reset to the start of the sequence.
     pub fn reset(&mut self) {
         *self = Self::new();
     }
 
-    /// Return the next integer in `0..=AVS3_RAND_MAX`.
-    pub fn next_u31(&mut self) -> u32 {
-        let value = self.state[self.front].wrapping_add(self.state[self.rear]);
-        self.state[self.front] = value;
-
-        self.front += 1;
-        if self.front == STATE_DEGREE {
-            self.front = 0;
-        }
-        self.rear += 1;
-        if self.rear == STATE_DEGREE {
-            self.rear = 0;
-        }
-
-        (value >> 1) & AVS3_RAND_MAX
+    /// Return the next value in `0..=AVS3_RAND_MAX`, as C's `rand()` would.
+    pub fn rand(&mut self) -> u32 {
+        // Wrapping matches the C, which multiplies into an `unsigned int` and lets
+        // it overflow. The mask is `mod 32768`, so only the seed's low 15 bits ever
+        // matter and the period is exactly 32768.
+        self.seed = self.seed.wrapping_mul(MULTIPLIER).wrapping_add(INCREMENT) & AVS3_RAND_MAX;
+        self.seed
     }
 }
 
@@ -92,46 +77,82 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_stream_matches_glibc_rand() {
+    fn stream_matches_bwe_dec_c() {
         let expected = [
-            1_804_289_383,
-            846_930_886,
-            1_681_692_777,
-            1_714_636_915,
-            1_957_747_793,
-            424_238_335,
-            719_885_386,
-            1_649_760_492,
-            596_516_649,
-            1_189_641_421,
+            5871, 17916, 17541, 25306, 13067, 17896, 9217, 21158, 29927, 22676, 32573, 29490,
         ];
         let mut random = Avs3Random::new();
         for value in expected {
-            assert_eq!(random.next_u31(), value);
+            assert_eq!(random.rand(), value);
         }
     }
 
     #[test]
-    fn zero_seed_and_reset_use_the_default_stream() {
-        let mut zero = Avs3Random::from_seed(0);
-        let mut default = Avs3Random::default();
-        for _ in 0..100 {
-            assert_eq!(zero.next_u31(), default.next_u31());
+    fn every_draw_fits_the_reference_range() {
+        let mut random = Avs3Random::new();
+        for _ in 0..100_000 {
+            assert!(random.rand() <= AVS3_RAND_MAX);
         }
+    }
 
-        zero.reset();
-        assert_eq!(zero.next_u31(), 1_804_289_383);
+    /// Scaled the way both call sites scale it, the noise spans `[-1, 1]` rather
+    /// than collapsing the way the C library's `RAND_MAX` would.
+    #[test]
+    fn scaled_noise_is_uniform_over_the_full_range() {
+        let mut random = Avs3Random::new();
+        let mut above = 0;
+        let (mut low, mut high) = (f32::MAX, f32::MIN);
+        for _ in 0..10_000 {
+            let noise = (random.rand() as f32 / AVS3_RAND_MAX as f32) * 2.0 - 1.0;
+            assert!((-1.0..=1.0).contains(&noise), "out of range: {noise}");
+            low = low.min(noise);
+            high = high.max(noise);
+            if noise > 0.0 {
+                above += 1;
+            }
+        }
+        assert!(
+            (4000..6000).contains(&above),
+            "not uniform: {above} above zero"
+        );
+        assert!(
+            low < -0.99 && high > 0.99,
+            "range not covered: {low}..{high}"
+        );
+    }
+
+    #[test]
+    fn period_is_the_state_size() {
+        let mut random = Avs3Random::new();
+        let first = random.rand();
+        let mut steps = 1usize;
+        while random.rand() != first {
+            steps += 1;
+            assert!(steps <= 1 << 16, "period did not close");
+        }
+        assert_eq!(steps, 1 << 15);
+    }
+
+    #[test]
+    fn reset_returns_to_the_start_of_the_stream() {
+        let mut random = Avs3Random::new();
+        let first = random.rand();
+        for _ in 0..1000 {
+            random.rand();
+        }
+        random.reset();
+        assert_eq!(random.rand(), first);
     }
 
     #[test]
     fn clones_continue_independently_from_the_same_state() {
-        let mut first = Avs3Random::from_seed(17);
+        let mut first = Avs3Random::new();
         for _ in 0..13 {
-            first.next_u31();
+            first.rand();
         }
         let mut second = first.clone();
         for _ in 0..100 {
-            assert_eq!(first.next_u31(), second.next_u31());
+            assert_eq!(first.rand(), second.rand());
         }
     }
 }
