@@ -26,6 +26,44 @@ pub const CHANNEL_WARMUP_FRAMES: u64 = 1;
 /// is what the extra frame over [`CHANNEL_WARMUP_FRAMES`] buys.
 pub const HOA_WARMUP_FRAMES: u64 = HOA_BASIS_DELAY_FRAMES as u64;
 
+/// Which synthesis backend a frame header selects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BackendKind {
+    Mono,
+    Stereo,
+    Mc,
+    Mix,
+    Hoa,
+}
+
+fn backend_kind(header: &FrameHeader) -> Result<BackendKind, DecodeError> {
+    match (header.profile, header.channel_config) {
+        (CodecProfile::ChannelBased, Some(ChannelConfig::Mono)) => Ok(BackendKind::Mono),
+        (CodecProfile::ChannelBased, Some(ChannelConfig::Stereo)) => Ok(BackendKind::Stereo),
+        (CodecProfile::ChannelBased, Some(config)) if is_multichannel_config(config) => {
+            Ok(BackendKind::Mc)
+        }
+        (CodecProfile::Mixed, _) => Ok(BackendKind::Mix),
+        (
+            CodecProfile::Hoa,
+            Some(ChannelConfig::Hoa1 | ChannelConfig::Hoa2 | ChannelConfig::Hoa3),
+        ) => Ok(BackendKind::Hoa),
+        _ => Err(DecodeError::UnsupportedBackend),
+    }
+}
+
+/// Frames of preroll a decoder for `header` would need after a reset.
+///
+/// The same value [`BuiltinDecoder::warmup_frames`] reports, without building a
+/// decoder: it depends only on which backend the header selects, so a caller
+/// sizing a seek does not have to allocate synthesis state to ask.
+pub fn warmup_frames_for(header: &FrameHeader) -> Result<u64, DecodeError> {
+    Ok(match backend_kind(header)? {
+        BackendKind::Hoa => HOA_WARMUP_FRAMES,
+        _ => CHANNEL_WARMUP_FRAMES,
+    })
+}
+
 /// The built-in AV3A decoder selected from a frame header.
 ///
 /// This is the common stateful entry point for applications that do not need
@@ -58,31 +96,23 @@ macro_rules! dispatch {
 
 impl BuiltinDecoder {
     pub fn configure(header: &FrameHeader) -> Result<Self, DecodeError> {
-        match (header.profile, header.channel_config) {
-            (CodecProfile::ChannelBased, Some(ChannelConfig::Mono)) => Ok(Self::Mono(Box::new(
+        Ok(match backend_kind(header)? {
+            BackendKind::Mono => Self::Mono(Box::new(
                 PendingDecoder::new(MonoDecoderBackend::new_builtin()?).configure(header)?,
-            ))),
-            (CodecProfile::ChannelBased, Some(ChannelConfig::Stereo)) => {
-                Ok(Self::Stereo(Box::new(
-                    PendingDecoder::new(StereoDecoderBackend::new_builtin()?).configure(header)?,
-                )))
-            }
-            (CodecProfile::ChannelBased, Some(config)) if is_multichannel_config(config) => {
-                Ok(Self::Mc(Box::new(
-                    PendingDecoder::new(McDecoderBackend::new_builtin()?).configure(header)?,
-                )))
-            }
-            (CodecProfile::Mixed, _) => Ok(Self::Mix(Box::new(
+            )),
+            BackendKind::Stereo => Self::Stereo(Box::new(
+                PendingDecoder::new(StereoDecoderBackend::new_builtin()?).configure(header)?,
+            )),
+            BackendKind::Mc => Self::Mc(Box::new(
+                PendingDecoder::new(McDecoderBackend::new_builtin()?).configure(header)?,
+            )),
+            BackendKind::Mix => Self::Mix(Box::new(
                 PendingDecoder::new(MixDecoderBackend::new_builtin()?).configure(header)?,
-            ))),
-            (
-                CodecProfile::Hoa,
-                Some(ChannelConfig::Hoa1 | ChannelConfig::Hoa2 | ChannelConfig::Hoa3),
-            ) => Ok(Self::Hoa(Box::new(
+            )),
+            BackendKind::Hoa => Self::Hoa(Box::new(
                 PendingDecoder::new(HoaDecoderBackend::new_builtin()?).configure(header)?,
-            ))),
-            _ => Err(DecodeError::UnsupportedBackend),
-        }
+            )),
+        })
     }
 
     /// Decode into caller-owned interleaved PCM16 storage.

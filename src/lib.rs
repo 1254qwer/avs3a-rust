@@ -90,7 +90,9 @@ pub mod wav;
 /// [`backend::DecoderBackend`]; [`decode::BuiltinDecoder`] picks the right
 /// backend from a frame header so callers do not have to.
 pub mod decode {
-    pub use crate::builtin_decoder::{BuiltinDecoder, CHANNEL_WARMUP_FRAMES, HOA_WARMUP_FRAMES};
+    pub use crate::builtin_decoder::{
+        BuiltinDecoder, CHANNEL_WARMUP_FRAMES, HOA_WARMUP_FRAMES, warmup_frames_for,
+    };
     pub use crate::decoder::{
         AudioFrame, Decoder, DecoderConfig, FLOAT_FULL_SCALE, PendingDecoder,
     };
@@ -242,7 +244,7 @@ pub mod neural {
 pub use crate::decode::{BuiltinDecoder, DecodeError};
 pub use crate::header::{FrameHeader, parse_header};
 pub use crate::mp4::{Av3aTrack, Mp4FrameReader, is_iso_bmff};
-pub use crate::stream::{EncodedFrame, FrameStream, StreamEvent};
+pub use crate::stream::{EncodedFrame, FrameStream, StreamEvent, parse_frames};
 pub use crate::wav::WavWriter;
 
 /// Calculate the CRC used by the AVS3 reference implementation.

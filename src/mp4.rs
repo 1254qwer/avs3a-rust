@@ -20,7 +20,7 @@
 use std::io::{Read, Seek, SeekFrom};
 
 pub use crate::error::Mp4Error;
-use crate::header::{MAX_HEADER_BYTES, MAX_PAYLOAD_BYTES, parse_header_at};
+use crate::header::{FrameHeader, MAX_HEADER_BYTES, MAX_PAYLOAD_BYTES, parse_header_at};
 use crate::stream::EncodedFrame;
 
 /// The `stsd` sample entry format that identifies an AV3A track.
@@ -236,6 +236,38 @@ impl Av3aTrack {
     }
 
     /// The sample index, in decode order.
+    /// Header of the track's first frame, read out of `bytes`.
+    ///
+    /// The sample table lives in `moov`, but the channel layout and object count
+    /// only appear in a frame header inside `mdat`. Returns
+    /// [`Mp4Error::NeedMoreData`] when `bytes` stops short of that sample, so a
+    /// caller widening a prefix gets the same kind of answer it already handles
+    /// from [`Self::from_prefix`] rather than having to do its own bookkeeping.
+    pub fn first_frame_header(&self, bytes: &[u8]) -> Result<FrameHeader, Mp4Error> {
+        let sample = *self
+            .samples
+            .first()
+            .ok_or(Mp4Error::MissingBox { kind: *b"stsz" })?;
+        let end = sample.end()?;
+        if (bytes.len() as u64) < end {
+            return Err(Mp4Error::NeedMoreData {
+                needed: end,
+                available: bytes.len() as u64,
+            });
+        }
+        let start = usize::try_from(sample.offset).map_err(|_| Mp4Error::ArithmeticOverflow)?;
+        let stop = usize::try_from(end).map_err(|_| Mp4Error::ArithmeticOverflow)?;
+        let header = parse_header_at(&bytes[start..stop], start)?;
+        if header.frame_len > stop - start {
+            return Err(Mp4Error::FrameExceedsSample {
+                index: 0,
+                frame_len: header.frame_len,
+                sample_size: stop - start,
+            });
+        }
+        Ok(header)
+    }
+
     pub fn samples(&self) -> &[Mp4Sample] {
         &self.samples
     }

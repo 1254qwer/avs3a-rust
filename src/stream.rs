@@ -178,6 +178,31 @@ impl FrameStream {
     }
 }
 
+/// Parse a buffer that holds whole frames back to back.
+///
+/// Unlike [`FrameStream`] this never resynchronises: `bytes` must begin at a
+/// frame header and end exactly on a frame boundary. That is what an MP4 sample
+/// table hands you, so a caller working from one does not have to handle a
+/// "skipped bytes" event that cannot occur, nor allocate a stream per batch.
+pub fn parse_frames(bytes: &[u8]) -> Result<Vec<EncodedFrame>, StreamError> {
+    let mut frames = Vec::new();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        let header = parse_header_at(&bytes[offset..], offset)?;
+        let end = offset
+            .checked_add(header.frame_len)
+            .ok_or(StreamError::Header(HeaderError::ArithmeticOverflow))?;
+        if end > bytes.len() {
+            return Err(StreamError::TrailingData {
+                bytes: bytes.len() - offset,
+            });
+        }
+        frames.push(EncodedFrame::new(header, bytes[offset..end].to_vec()));
+        offset = end;
+    }
+    Ok(frames)
+}
+
 fn find_sync(input: &[u8]) -> Option<usize> {
     input
         .windows(2)
@@ -271,6 +296,41 @@ mod tests {
         let mut stream = FrameStream::new();
         let events = stream.push(&frame).unwrap();
         assert!(!frames(&events).next().unwrap().crc_is_valid());
+    }
+
+    #[test]
+    fn parse_frames_reads_back_to_back_frames() {
+        let mut bytes = make_frame(1);
+        bytes.extend_from_slice(&make_frame(2));
+        let parsed = parse_frames(&bytes).unwrap();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].bytes(), &make_frame(1)[..]);
+        assert_eq!(parsed[1].bytes(), &make_frame(2)[..]);
+        // Each frame must carry its *own* header: the CRC in the header is
+        // payload-dependent, so reusing the first frame's header for the second
+        // would still slice correctly and only show up here.
+        assert!(parsed.iter().all(|frame| frame.crc_is_valid()));
+    }
+
+    /// The point of the strict parser: it must not resynchronise past junk the
+    /// way `FrameStream` does, because an MP4 sample cannot legitimately contain
+    /// any.
+    #[test]
+    fn parse_frames_refuses_leading_garbage() {
+        let mut bytes = vec![0x00, 0x11, 0x22];
+        bytes.extend_from_slice(&make_frame(3));
+        assert!(parse_frames(&bytes).is_err());
+    }
+
+    #[test]
+    fn parse_frames_reports_a_partial_trailing_frame() {
+        let frame = make_frame(4);
+        let mut bytes = frame.clone();
+        bytes.extend_from_slice(&frame[..frame.len() - 1]);
+        assert!(matches!(
+            parse_frames(&bytes),
+            Err(StreamError::TrailingData { .. })
+        ));
     }
 
     #[test]
