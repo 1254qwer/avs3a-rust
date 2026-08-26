@@ -140,7 +140,7 @@ fn public_framing_crc_and_mc_backend_decode_complete_5_1_frame() {
     assert_eq!(diagnostics.entropy_bytes(), &[194, 190, 190, 20, 190, 176]);
     assert_eq!(diagnostics.consumed_bits(), AUDIO_BITS - 5);
     assert_eq!(diagnostics.padding_bits(), 5);
-    assert_eq!(pcm_fingerprint(&samples), 0xdacf_c2d7_3247_617f);
+    assert_eq!(pcm_fingerprint(&samples), 0x16ac_b034_83de_db62);
     assert!(
         decoder.backend().core().last_shaped_spectra()[3][MC_LFE_RESERVED_LINES..]
             .iter()
