@@ -243,7 +243,7 @@ pub mod neural {
 // The decode path, re-exported so the common case needs one import.
 pub use crate::decode::{BuiltinDecoder, DecodeError};
 pub use crate::header::{FrameHeader, parse_header};
-pub use crate::mp4::{Av3aTrack, Mp4FrameReader, is_iso_bmff};
+pub use crate::mp4::{Av3aTrack, Mp4FrameReader, is_iso_bmff, parse_sample};
 pub use crate::stream::{EncodedFrame, FrameStream, StreamEvent, parse_frames};
 pub use crate::wav::WavWriter;
 

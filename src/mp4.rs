@@ -71,6 +71,40 @@ pub struct Mp4Sample {
     pub duration: u32,
 }
 
+/// Parse one AV3A access unit stored in an MP4 sample.
+///
+/// The MP4 sample table may give an access unit a few trailing padding bytes.
+/// Elementary-stream parsing cannot accept those bytes between frames, so this
+/// helper uses the frame length from the sample's own header and returns an
+/// [`EncodedFrame`] containing only the coded frame. `bytes` must contain the
+/// complete sample; bytes after the coded frame are ignored.
+///
+/// `index` is used only to make sample-size errors actionable for callers that
+/// are walking a track.
+pub fn parse_sample(bytes: &[u8], index: usize) -> Result<EncodedFrame, Mp4Error> {
+    if bytes.len() > MAX_SAMPLE_BYTES {
+        return Err(Mp4Error::SampleTooLarge {
+            index,
+            size: bytes.len(),
+            limit: MAX_SAMPLE_BYTES,
+        });
+    }
+
+    let header = parse_header_at(bytes, 0)?;
+    if header.frame_len > bytes.len() {
+        return Err(Mp4Error::FrameExceedsSample {
+            index,
+            frame_len: header.frame_len,
+            sample_size: bytes.len(),
+        });
+    }
+
+    Ok(EncodedFrame::new(
+        header,
+        bytes[..header.frame_len].to_vec(),
+    ))
+}
+
 impl Mp4Sample {
     /// Byte offset one past the end of the sample.
     pub fn end(&self) -> Result<u64, Mp4Error> {
@@ -122,6 +156,54 @@ impl Av3aTrack {
     pub fn read_from<R: Read + Seek>(reader: &mut R) -> Result<Self, Mp4Error> {
         let moov = read_moov(reader)?;
         Self::from_moov_body(&moov)
+    }
+
+    /// Index an AV3A track from a complete `moov` box.
+    ///
+    /// This is useful for range readers that fetch the metadata box separately
+    /// from the media samples. Bytes after the box are ignored, matching
+    /// [`Self::from_prefix`].
+    pub fn from_moov_box(bytes: &[u8]) -> Result<Self, Mp4Error> {
+        let available = bytes.len() as u64;
+        let decoded = match decode_box_header(bytes) {
+            BoxHeaderResult::NeedMore(needed) => {
+                return Err(Mp4Error::NeedMoreData {
+                    needed: needed as u64,
+                    available,
+                });
+            }
+            BoxHeaderResult::Decoded(decoded) => decoded,
+        };
+        if decoded.kind != *b"moov" {
+            return Err(Mp4Error::MissingBox { kind: *b"moov" });
+        }
+
+        let total = match decoded.size {
+            Some(size) => usize::try_from(size).map_err(|_| Mp4Error::ArithmeticOverflow)?,
+            None => bytes.len(),
+        };
+        if total < decoded.header_len {
+            return Err(Mp4Error::InvalidBoxSize {
+                kind: decoded.kind,
+                size: total as u64,
+            });
+        }
+        if total > bytes.len() {
+            return Err(Mp4Error::NeedMoreData {
+                needed: total as u64,
+                available,
+            });
+        }
+
+        let body = &bytes[decoded.header_len..total];
+        if body.len() as u64 > MAX_MOOV_BYTES {
+            return Err(Mp4Error::BoxTooLarge {
+                kind: decoded.kind,
+                size: body.len() as u64,
+                limit: MAX_MOOV_BYTES,
+            });
+        }
+        Self::from_moov_body(body)
     }
 
     /// Index the AV3A track from the leading bytes of an MP4/M4A file.
@@ -464,18 +546,10 @@ impl<R: Read + Seek> Mp4FrameReader<R> {
         self.reader.read_exact(&mut self.buffer)?;
         self.cursor = Some(sample.end()?);
 
-        let header = parse_header_at(&self.buffer, 0)?;
-        if header.frame_len > size {
-            return Err(Mp4Error::FrameExceedsSample {
-                index,
-                frame_len: header.frame_len,
-                sample_size: size,
-            });
-        }
         // Trailing bytes are muxer padding: one sample is one access unit.
-        let bytes = self.buffer[..header.frame_len].to_vec();
+        let frame = parse_sample(&self.buffer, index)?;
         self.position += 1;
-        Ok(Some(EncodedFrame::new(header, bytes)))
+        Ok(Some(frame))
     }
 
     /// Recover the underlying reader.
@@ -1435,6 +1509,35 @@ mod tests {
     }
 
     #[test]
+    fn indexes_a_standalone_moov_box() {
+        let file = standard_file();
+        let ftyp_len = 8 + 16;
+        let mut iter = BoxIter::new(&file[ftyp_len..], "file");
+        let (kind, body) = iter.next_box().unwrap().unwrap();
+        assert_eq!(kind, *b"moov");
+        let moov = boxed(&kind, body);
+
+        let track = Av3aTrack::from_moov_box(&moov).expect("standalone moov is valid");
+        assert_eq!(track.samples().len(), 13);
+        assert_eq!(track.declared_channels(), 2);
+    }
+
+    #[test]
+    fn standalone_moov_reports_truncation_without_parsing_a_prefix() {
+        let file = standard_file();
+        let ftyp_len = 8 + 16;
+        let mut iter = BoxIter::new(&file[ftyp_len..], "file");
+        let (kind, body) = iter.next_box().unwrap().unwrap();
+        let moov = boxed(&kind, body);
+        let truncated = &moov[..moov.len() - 1];
+
+        assert!(matches!(
+            Av3aTrack::from_moov_box(truncated),
+            Err(Mp4Error::NeedMoreData { .. })
+        ));
+    }
+
+    #[test]
     fn skips_tracks_without_an_av3a_sample_entry() {
         let file = build_file(
             &[
@@ -1579,5 +1682,84 @@ mod tests {
             reader.seek_to_sample(4),
             Err(Mp4Error::SampleOutOfRange { index: 4, count: 3 })
         ));
+    }
+
+    #[test]
+    fn parse_sample_strips_trailing_muxer_padding() {
+        let frame = make_frame(0x37);
+        let mut sample = frame.clone();
+        sample.extend_from_slice(&[0xa5; 13]);
+
+        let parsed = parse_sample(&sample, 7).expect("padded sample is valid");
+        assert_eq!(parsed.bytes(), frame.as_slice());
+        assert_eq!(parsed.header().frame_len, frame.len());
+        assert!(parsed.crc_is_valid());
+    }
+
+    #[test]
+    fn parse_sample_reports_a_coded_frame_larger_than_the_sample() {
+        let frame = make_frame(0x42);
+        let sample = &frame[..frame.len() - 1];
+
+        assert!(matches!(
+            parse_sample(sample, 3),
+            Err(Mp4Error::FrameExceedsSample {
+                index: 3,
+                frame_len,
+                sample_size
+            }) if frame_len == frame.len() && sample_size == frame.len() - 1
+        ));
+    }
+
+    #[test]
+    fn frame_reader_strips_padding_declared_by_sample_table() {
+        let frames: Vec<Vec<u8>> = (0..3).map(|index| make_frame(index as u8 + 9)).collect();
+        let padded: Vec<Vec<u8>> = frames
+            .iter()
+            .map(|frame| {
+                let mut sample = frame.clone();
+                sample.extend_from_slice(&[0xa5; 7]);
+                sample
+            })
+            .collect();
+        let sizes: Vec<u32> = padded
+            .iter()
+            .map(|sample| u32::try_from(sample.len()).unwrap())
+            .collect();
+        let mdat_payload: Vec<u8> = padded.concat();
+
+        let placeholder = build_file(
+            &[
+                &stsd(&av3a_entry(1, 48_000)),
+                &stts(&[(3, 1_024)]),
+                &stsc(&[(1, 3)]),
+                &stsz_per_sample(&sizes),
+                &stco(&[0]),
+            ],
+            &[],
+            &mdat_payload,
+        );
+        let mdat_start = placeholder.len() - mdat_payload.len();
+        let file = build_file(
+            &[
+                &stsd(&av3a_entry(1, 48_000)),
+                &stts(&[(3, 1_024)]),
+                &stsc(&[(1, 3)]),
+                &stsz_per_sample(&sizes),
+                &stco(&[mdat_start as u32]),
+            ],
+            &[],
+            &mdat_payload,
+        );
+
+        let mut reader = Mp4FrameReader::open(Cursor::new(file)).expect("valid container");
+        for expected in &frames {
+            let frame = reader
+                .next_frame()
+                .expect("read succeeds")
+                .expect("a frame");
+            assert_eq!(frame.bytes(), expected.as_slice());
+        }
+        assert!(reader.next_frame().expect("read succeeds").is_none());
     }
 }
